@@ -71,7 +71,7 @@ R2 has a generous free tier but **requires a credit card** to activate. KV's fre
 
 ```bash
 # 1. Clone the repo
-git clone https://github.com/YOUR_USERNAME/easydrop.git
+git clone https://github.com/vitem98/easydrop.git
 cd easydrop
 
 # 2. Install dependencies
@@ -177,7 +177,7 @@ A: Two upgrade paths:
 ### 快速部署
 
 ```bash
-git clone https://github.com/YOUR_USERNAME/easydrop.git
+git clone https://github.com/vitem98/easydrop.git
 cd easydrop && npm install
 npx wrangler login
 npx wrangler kv namespace create STORE
