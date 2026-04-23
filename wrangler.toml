@@ -1,0 +1,13 @@
+name = "easydrop"
+compatibility_date = "2025-04-01"
+pages_build_output_dir = "./public"
+
+# 1. npx wrangler kv namespace create STORE
+# 2. copy the returned id into the line below:
+[[kv_namespaces]]
+binding = "STORE"
+id = "YOUR_KV_NAMESPACE_ID"
+
+[vars]
+MAX_FILE_SIZE = "26214400"
+ADMIN_PASSWORD = "YOUR_ADMIN_PASSWORD"

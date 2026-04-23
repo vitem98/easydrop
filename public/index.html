@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="zh-CN" class="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>EasyDrop</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            brand: { 50: '#eff6ff', 500: '#3b82f6', 600: '#2563eb', 700: '#1d4ed8' }
+          }
+        }
+      }
+    }
+  </script>
+  <script src="https://cdn.jsdelivr.net/npm/qrcode/build/qrcode.min.js"></script>
+  <link rel="stylesheet" href="assets/styles.css" />
+</head>
+<body class="bg-gray-50 text-gray-900 dark:bg-gray-900 dark:text-gray-100 min-h-screen flex flex-col">
+  <header class="border-b border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-950">
+    <div class="max-w-3xl mx-auto px-4 py-4 flex items-center justify-between">
+      <div class="flex items-center gap-2">
+        <div class="w-8 h-8 rounded-lg bg-brand-600 flex items-center justify-center text-white font-bold text-sm">ED</div>
+        <h1 class="text-lg font-bold tracking-tight">EasyDrop</h1>
+      </div>
+      <div class="flex items-center gap-2">
+        <button id="btn-lang" class="px-3 py-1.5 rounded-md text-sm font-medium bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 transition">EN / 中文</button>
+        <button id="btn-theme" class="p-2 rounded-md bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 transition" title="Toggle dark mode">
+          <svg id="icon-moon" class="w-5 h-5 hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"></path></svg>
+          <svg id="icon-sun" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"></path></svg>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <main class="flex-1 max-w-3xl w-full mx-auto px-4 py-6">
+    <nav class="flex gap-1 p-1 bg-gray-200/60 dark:bg-gray-800/60 rounded-xl mb-6">
+      <button data-tab="send" class="tab-btn flex-1 py-2.5 rounded-lg text-sm font-medium transition bg-white dark:bg-gray-700 shadow-sm" data-t="send">发送</button>
+      <button data-tab="receive" class="tab-btn flex-1 py-2.5 rounded-lg text-sm font-medium transition text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200" data-t="receive">接收</button>
+    </nav>
+
+    <!-- Send Tab -->
+    <section id="panel-send" class="space-y-5">
+      <div id="dropzone" class="border-2 border-dashed border-gray-300 dark:border-gray-700 rounded-2xl p-8 text-center transition hover:border-brand-500 hover:bg-brand-50 dark:hover:bg-brand-900/20 cursor-pointer">
+        <svg class="w-12 h-12 mx-auto mb-3 text-gray-400 dark:text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path></svg>
+        <p class="text-sm text-gray-600 dark:text-gray-300 mb-1" data-t="dropHint">拖拽文件到此处，或点击选择</p>
+        <p class="text-xs text-gray-400 dark:text-gray-500" data-t="maxSize">最大 25 MB</p>
+        <input type="file" id="fileInput" class="hidden" />
+      </div>
+
+      <div id="fileInfo" class="hidden bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4 flex items-center gap-3">
+        <svg class="w-8 h-8 text-brand-600 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
+        <div class="min-w-0 flex-1">
+          <p id="fileName" class="text-sm font-medium truncate">filename</p>
+          <p id="fileSize" class="text-xs text-gray-500 dark:text-gray-400">0 B</p>
+        </div>
+        <button id="removeFile" class="p-1.5 rounded-md hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-400 hover:text-red-500 transition">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+        </button>
+      </div>
+
+      <div class="grid grid-cols-2 gap-4">
+        <div>
+          <label class="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1.5" data-t="ttlLabel">保留时间</label>
+          <select id="ttl" class="w-full rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500">
+            <option value="3600" data-t="ttl1h">1 小时</option>
+            <option value="86400" selected data-t="ttl1d">1 天</option>
+            <option value="604800" data-t="ttl7d">7 天</option>
+          </select>
+        </div>
+        <div class="flex items-end">
+          <label class="flex items-center gap-2 cursor-pointer select-none">
+            <input type="checkbox" id="oneTime" class="w-4 h-4 rounded border-gray-300 text-brand-600 focus:ring-brand-500" />
+            <span class="text-sm" data-t="oneTimeLabel">下载一次后自动删除</span>
+          </label>
+        </div>
+      </div>
+
+      <button id="btnUpload" disabled class="w-full py-2.5 rounded-xl bg-brand-600 hover:bg-brand-700 disabled:opacity-50 disabled:cursor-not-allowed text-white font-medium text-sm transition shadow-sm" data-t="generateCode">生成验证码</button>
+
+      <div id="uploadProgress" class="hidden">
+        <div class="h-2 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
+          <div id="progressBar" class="h-full bg-brand-600 transition-all duration-300" style="width:0%"></div>
+        </div>
+        <p class="text-xs text-gray-500 dark:text-gray-400 mt-1 text-center" id="progressText">0%</p>
+      </div>
+
+      <div id="uploadResult" class="hidden bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 p-6 text-center space-y-4">
+        <p class="text-sm text-gray-500 dark:text-gray-400" data-t="yourCode">你的验证码</p>
+        <div class="flex items-center justify-center gap-3">
+          <span id="resultCode" class="text-4xl font-bold tracking-widest text-brand-600 font-mono">------</span>
+          <button id="btnCopy" class="p-2 rounded-lg bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 transition" title="Copy">
+            <svg class="w-5 h-5 text-gray-600 dark:text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"></path></svg>
+          </button>
+        </div>
+        <div class="flex justify-center">
+          <canvas id="qrCanvas" class="rounded-xl border border-gray-200 dark:border-gray-700"></canvas>
+        </div>
+        <p id="resultMeta" class="text-xs text-gray-500 dark:text-gray-400"></p>
+        <div class="flex gap-2 justify-center">
+          <button id="btnNewUpload" class="px-4 py-2 rounded-lg bg-brand-600 hover:bg-brand-700 text-white text-sm font-medium transition" data-t="sendAnother">再传一个</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- Receive Tab -->
+    <section id="panel-receive" class="hidden space-y-5">
+      <div class="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 p-6">
+        <p class="text-sm text-gray-500 dark:text-gray-400 mb-3 text-center" data-t="enterCode">输入 6 位验证码</p>
+        <div class="flex justify-center gap-2">
+          <input type="text" maxlength="1" inputmode="numeric" class="code-input w-12 h-14 text-center text-2xl font-bold rounded-xl border-2 border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-900 focus:border-brand-500 focus:ring-2 focus:ring-brand-500/30 outline-none transition" />
+          <input type="text" maxlength="1" inputmode="numeric" class="code-input w-12 h-14 text-center text-2xl font-bold rounded-xl border-2 border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-900 focus:border-brand-500 focus:ring-2 focus:ring-brand-500/30 outline-none transition" />
+          <input type="text" maxlength="1" inputmode="numeric" class="code-input w-12 h-14 text-center text-2xl font-bold rounded-xl border-2 border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-900 focus:border-brand-500 focus:ring-2 focus:ring-brand-500/30 outline-none transition" />
+          <input type="text" maxlength="1" inputmode="numeric" class="code-input w-12 h-14 text-center text-2xl font-bold rounded-xl border-2 border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-900 focus:border-brand-500 focus:ring-2 focus:ring-brand-500/30 outline-none transition" />
+          <input type="text" maxlength="1" inputmode="numeric" class="code-input w-12 h-14 text-center text-2xl font-bold rounded-xl border-2 border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-900 focus:border-brand-500 focus:ring-2 focus:ring-brand-500/30 outline-none transition" />
+          <input type="text" maxlength="1" inputmode="numeric" class="code-input w-12 h-14 text-center text-2xl font-bold rounded-xl border-2 border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-900 focus:border-brand-500 focus:ring-2 focus:ring-brand-500/30 outline-none transition" />
+        </div>
+        <button id="btnFetch" class="w-full mt-5 py-2.5 rounded-xl bg-brand-600 hover:bg-brand-700 text-white font-medium text-sm transition shadow-sm disabled:opacity-50 disabled:cursor-not-allowed" data-t="checkFile">查询文件</button>
+      </div>
+
+      <div id="receiveInfo" class="hidden bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 p-5 space-y-3">
+        <div class="flex items-center gap-3">
+          <svg class="w-8 h-8 text-brand-600 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
+          <div class="min-w-0 flex-1">
+            <p id="recvFilename" class="text-sm font-medium truncate">---</p>
+            <p id="recvMeta" class="text-xs text-gray-500 dark:text-gray-400">---</p>
+          </div>
+        </div>
+        <div id="recvWarn" class="hidden rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 p-3 text-xs text-amber-700 dark:text-amber-300" data-t="oneTimeWarn">该文件设置了下载一次后自动删除，请确认后再下载。</div>
+        <a id="btnDownload" href="#" class="block w-full text-center py-2.5 rounded-xl bg-brand-600 hover:bg-brand-700 text-white font-medium text-sm transition shadow-sm" data-t="download">下载</a>
+      </div>
+    </section>
+  </main>
+
+  <footer class="text-center text-xs text-gray-400 dark:text-gray-600 py-6">
+    EasyDrop — Cloudflare Pages + KV
+  </footer>
+
+  <div id="toast" class="fixed bottom-6 left-1/2 -translate-x-1/2 px-4 py-2 rounded-lg bg-gray-900 dark:bg-white text-white dark:text-gray-900 text-sm font-medium shadow-lg transition-opacity opacity-0 pointer-events-none z-50"></div>
+
+  <script src="assets/app.js"></script>
+</body>
+</html>

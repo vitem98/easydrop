@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html lang="zh-CN" class="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>EasyDrop Admin</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            brand: { 50: '#eff6ff', 500: '#3b82f6', 600: '#2563eb', 700: '#1d4ed8' }
+          }
+        }
+      }
+    }
+  </script>
+</head>
+<body class="bg-gray-50 text-gray-900 dark:bg-gray-900 dark:text-gray-100 min-h-screen flex flex-col">
+  <header class="border-b border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-950">
+    <div class="max-w-5xl mx-auto px-4 py-4 flex items-center justify-between">
+      <div class="flex items-center gap-2">
+        <div class="w-8 h-8 rounded-lg bg-brand-600 flex items-center justify-center text-white font-bold text-sm">ED</div>
+        <h1 class="text-lg font-bold tracking-tight">EasyDrop <span class="text-xs font-normal text-gray-400 dark:text-gray-500">Admin</span></h1>
+      </div>
+      <div class="flex items-center gap-2">
+        <a href="/" class="px-3 py-1.5 rounded-md text-sm font-medium bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 transition">Back</a>
+        <button id="btn-logout" class="hidden px-3 py-1.5 rounded-md text-sm font-medium bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 hover:bg-red-200 dark:hover:bg-red-900/50 transition">Logout</button>
+        <button id="btn-theme" class="p-2 rounded-md bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 transition">
+          <svg id="icon-moon" class="w-5 h-5 hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"></path></svg>
+          <svg id="icon-sun" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"></path></svg>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <main class="flex-1 max-w-5xl w-full mx-auto px-4 py-6">
+
+    <!-- Login -->
+    <div id="login-panel" class="max-w-sm mx-auto mt-20">
+      <div class="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 p-8 text-center space-y-4">
+        <svg class="w-12 h-12 mx-auto text-brand-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path></svg>
+        <p class="text-sm text-gray-500 dark:text-gray-400">Enter admin password</p>
+        <input id="pwd" type="password" placeholder="Password" class="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-900 px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500" />
+        <button id="btn-login" class="w-full py-2.5 rounded-xl bg-brand-600 hover:bg-brand-700 text-white font-medium text-sm transition shadow-sm">Login</button>
+        <p id="login-err" class="text-xs text-red-500 hidden">Password incorrect</p>
+      </div>
+    </div>
+
+    <!-- Dashboard -->
+    <div id="dashboard" class="hidden space-y-6">
+      <!-- Stats -->
+      <div class="grid grid-cols-3 gap-4">
+        <div class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4 text-center">
+          <p class="text-2xl font-bold text-brand-600" id="stat-count">-</p>
+          <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">Active Files</p>
+        </div>
+        <div class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4 text-center">
+          <p class="text-2xl font-bold text-brand-600" id="stat-size">-</p>
+          <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">Storage Used</p>
+        </div>
+        <div class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4 text-center">
+          <p class="text-2xl font-bold text-brand-600" id="stat-limit">1 GB</p>
+          <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">KV Limit</p>
+        </div>
+      </div>
+
+      <!-- Actions -->
+      <div class="flex items-center justify-between">
+        <h2 class="text-sm font-semibold text-gray-700 dark:text-gray-300">File List</h2>
+        <button id="btn-refresh" class="px-3 py-1.5 rounded-md text-xs font-medium bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 transition flex items-center gap-1">
+          <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h5M20 20v-5h-5M4 9a9 9 0 0115.36-6.36M20 15a9 9 0 01-15.36 6.36"/></svg>
+          Refresh
+        </button>
+      </div>
+
+      <!-- Table -->
+      <div class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden">
+        <div class="overflow-x-auto">
+          <table class="w-full text-sm">
+            <thead>
+              <tr class="border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/80">
+                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Code</th>
+                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Filename</th>
+                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Size</th>
+                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Expires</th>
+                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">One-time</th>
+                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Created</th>
+                <th class="px-4 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Action</th>
+              </tr>
+            </thead>
+            <tbody id="file-table" class="divide-y divide-gray-100 dark:divide-gray-700/50">
+              <tr><td colspan="7" class="px-4 py-8 text-center text-gray-400 dark:text-gray-500 text-sm">Loading...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <p id="empty-hint" class="hidden text-center text-sm text-gray-400 dark:text-gray-500 py-4">No active files.</p>
+    </div>
+  </main>
+
+  <footer class="text-center text-xs text-gray-400 dark:text-gray-600 py-6">
+    EasyDrop Admin — Cloudflare Pages + KV
+  </footer>
+
+  <script>
+    const $ = s => document.querySelector(s);
+
+    // Theme
+    const savedTheme = localStorage.getItem('ld-theme');
+    if (savedTheme) {
+      document.documentElement.classList.toggle('dark', savedTheme === 'dark');
+    } else {
+      document.documentElement.classList.toggle('dark', window.matchMedia('(prefers-color-scheme: dark)').matches);
+    }
+    function updateThemeIcon() {
+      const d = document.documentElement.classList.contains('dark');
+      $('#icon-moon').classList.toggle('hidden', !d);
+      $('#icon-sun').classList.toggle('hidden', d);
+    }
+    updateThemeIcon();
+    $('#btn-theme').addEventListener('click', () => {
+      const d = document.documentElement.classList.toggle('dark');
+      localStorage.setItem('ld-theme', d ? 'dark' : 'light');
+      updateThemeIcon();
+    });
+
+    // Auth
+    let token = sessionStorage.getItem('admin-token') || '';
+
+    function formatSize(bytes) {
+      if (!bytes) return '0 B';
+      if (bytes < 1024) return bytes + ' B';
+      if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+      if (bytes < 1024 * 1024 * 1024) return (bytes / (1024 * 1024)).toFixed(2) + ' MB';
+      return (bytes / (1024 * 1024 * 1024)).toFixed(2) + ' GB';
+    }
+
+    function timeAgo(ts) {
+      if (!ts) return '-';
+      return new Date(ts * 1000).toLocaleString();
+    }
+
+    function showDashboard() {
+      $('#login-panel').classList.add('hidden');
+      $('#dashboard').classList.remove('hidden');
+      $('#btn-logout').classList.remove('hidden');
+      loadFiles();
+    }
+
+    function showLogin() {
+      $('#login-panel').classList.remove('hidden');
+      $('#dashboard').classList.add('hidden');
+      $('#btn-logout').classList.add('hidden');
+    }
+
+    async function tryLogin(password) {
+      try {
+        const res = await fetch('/api/admin/list', {
+          headers: { 'Authorization': 'Bearer ' + password }
+        });
+        if (res.status === 401) {
+          $('#login-err').classList.remove('hidden');
+          return false;
+        }
+        if (!res.ok) {
+          $('#login-err').textContent = 'Server error';
+          $('#login-err').classList.remove('hidden');
+          return false;
+        }
+        token = password;
+        sessionStorage.setItem('admin-token', token);
+        return true;
+      } catch (e) {
+        $('#login-err').textContent = 'Network error';
+        $('#login-err').classList.remove('hidden');
+        return false;
+      }
+    }
+
+    async function loadFiles() {
+      try {
+        const res = await fetch('/api/admin/list', {
+          headers: { 'Authorization': 'Bearer ' + token }
+        });
+        if (res.status === 401) {
+          sessionStorage.removeItem('admin-token');
+          token = '';
+          showLogin();
+          return;
+        }
+        const data = await res.json();
+        $('#stat-count').textContent = data.count;
+        $('#stat-size').textContent = formatSize(data.totalSize);
+
+        const tbody = $('#file-table');
+        if (!data.files || data.files.length === 0) {
+          tbody.innerHTML = '';
+          $('#empty-hint').classList.remove('hidden');
+          return;
+        }
+        $('#empty-hint').classList.add('hidden');
+        tbody.innerHTML = data.files.map(f => `
+          <tr class="hover:bg-gray-50 dark:hover:bg-gray-700/30 transition">
+            <td class="px-4 py-3 font-mono font-bold text-brand-600">${f.code}</td>
+            <td class="px-4 py-3 max-w-[200px] truncate" title="${escHtml(f.filename)}">${escHtml(f.filename)}</td>
+            <td class="px-4 py-3 text-gray-500 dark:text-gray-400 whitespace-nowrap">${formatSize(f.size)}</td>
+            <td class="px-4 py-3 text-gray-500 dark:text-gray-400 whitespace-nowrap">${timeAgo(f.expiresAt)}</td>
+            <td class="px-4 py-3">${f.oneTime ? '<span class="inline-block px-2 py-0.5 text-xs rounded-full bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300">Yes</span>' : '<span class="text-gray-400">No</span>'}</td>
+            <td class="px-4 py-3 text-gray-500 dark:text-gray-400 whitespace-nowrap">${timeAgo(f.createdAt)}</td>
+            <td class="px-4 py-3 text-right">
+              <button onclick="deleteFile('${f.code}')" class="px-2.5 py-1 rounded-md text-xs font-medium bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 hover:bg-red-200 dark:hover:bg-red-900/50 transition">Delete</button>
+            </td>
+          </tr>
+        `).join('');
+      } catch (e) {
+        console.error(e);
+      }
+    }
+
+    function escHtml(s) {
+      const d = document.createElement('div');
+      d.textContent = s;
+      return d.innerHTML;
+    }
+
+    async function deleteFile(code) {
+      if (!confirm(`Delete file ${code}?`)) return;
+      try {
+        const res = await fetch('/api/admin/delete', {
+          method: 'POST',
+          headers: {
+            'Authorization': 'Bearer ' + token,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ code }),
+        });
+        if (res.ok) {
+          loadFiles();
+        } else {
+          const d = await res.json().catch(() => ({}));
+          alert(d.error || 'Delete failed');
+        }
+      } catch (e) {
+        alert('Network error');
+      }
+    }
+
+    // Events
+    $('#btn-login').addEventListener('click', async () => {
+      const pwd = $('#pwd').value.trim();
+      if (!pwd) return;
+      $('#login-err').classList.add('hidden');
+      if (await tryLogin(pwd)) {
+        showDashboard();
+      }
+    });
+
+    $('#pwd').addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') $('#btn-login').click();
+    });
+
+    $('#btn-logout').addEventListener('click', () => {
+      sessionStorage.removeItem('admin-token');
+      token = '';
+      showLogin();
+    });
+
+    $('#btn-refresh').addEventListener('click', loadFiles);
+
+    // Auto-login if token exists
+    if (token) {
+      showDashboard();
+    }
+  </script>
+</body>
+</html>

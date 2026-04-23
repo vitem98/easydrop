@@ -1,0 +1,22 @@
+/* LocalDrop custom overrides */
+
+/* Hide number spinners on code inputs */
+.code-input::-webkit-outer-spin-button,
+.code-input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+.code-input[type="number"] {
+  appearance: textfield;
+  -moz-appearance: textfield;
+}
+
+/* Smooth page background transition */
+html, body {
+  transition: background-color 0.2s ease, color 0.2s ease;
+}
+
+/* Focus ring consistency */
+.code-input:focus {
+  caret-color: transparent;
+}

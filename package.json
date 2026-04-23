@@ -1,0 +1,15 @@
+{
+  "name": "easydrop",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Drop a file, get a code. Enter the code on another device, get the file.",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "format": "prettier --write .",
+    "lint": "eslint src public/assets"
+  },
+  "devDependencies": {
+    "wrangler": "^4.0.0"
+  }
+}
