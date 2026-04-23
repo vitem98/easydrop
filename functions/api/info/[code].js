@@ -23,6 +23,7 @@ export async function onRequestGet(context) {
   return json({
     filename: meta.filename,
     size: meta.size,
+    contentType: meta.contentType,
     oneTime: meta.oneTime,
     expiresAt: meta.expiresAt,
   });

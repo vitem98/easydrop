@@ -22,6 +22,9 @@ const i18n = {
     serverError: "Server error",
     selectFileFirst: "Please select a file first",
     fillCode: "Please enter the full 6-digit code",
+    preview: "Preview",
+    previewNotSupported: "Preview not supported for this file type",
+    loading: "Loading...",
   },
   zh: {
     send: "发送",
@@ -46,6 +49,9 @@ const i18n = {
     serverError: "服务器错误",
     selectFileFirst: "请先选择文件",
     fillCode: "请输入完整的 6 位验证码",
+    preview: "预览",
+    previewNotSupported: "该文件类型不支持预览",
+    loading: "加载中...",
   },
 };
 
@@ -262,6 +268,14 @@ async function fetchFileInfo() {
     $('#btnDownload').href = `/api/download/${code}`;
     $('#btnDownload').download = data.filename;
     $('#receiveInfo').classList.remove('hidden');
+    // Show preview button for supported types
+    const previewable = isPreviewable(data.filename, data.contentType);
+    $('#btnPreview').classList.toggle('hidden', !previewable);
+    if (previewable) {
+      $('#btnPreview').dataset.code = code;
+      $('#btnPreview').dataset.filename = data.filename;
+      $('#btnPreview').dataset.contentType = data.contentType || guessContentType(data.filename);
+    }
   } catch {
     toast(t('serverError'));
   } finally {
@@ -362,4 +376,115 @@ async function fetchFileInfo() {
   });
 
   $('#btnFetch').addEventListener('click', fetchFileInfo);
+
+  // Preview
+  $('#btnPreview').addEventListener('click', () => {
+    const btn = $('#btnPreview');
+    openPreview(btn.dataset.code, btn.dataset.filename, btn.dataset.contentType);
+  });
+  $('#previewClose').addEventListener('click', closePreview);
+  $('#previewBackdrop').addEventListener('click', closePreview);
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') closePreview();
+  });
 })();
+
+// --- Preview ---
+
+const PREVIEW_IMAGE = ['image/jpeg','image/png','image/gif','image/webp','image/svg+xml','image/bmp'];
+const PREVIEW_VIDEO = ['video/mp4','video/webm'];
+const PREVIEW_AUDIO = ['audio/mpeg','audio/wav','audio/ogg','audio/webm','audio/mp4'];
+const PREVIEW_PDF = ['application/pdf'];
+const PREVIEW_TEXT_TYPES = ['application/json','application/xml','application/javascript','text/xml'];
+const PREVIEW_TEXT_EXT = ['txt','md','json','xml','csv','js','ts','css','html','htm','yaml','yml','toml','ini','cfg','conf','log','sh','bat','py','rb','java','c','cpp','h','go','rs','sql'];
+
+function guessContentType(filename) {
+  const ext = (filename || '').split('.').pop().toLowerCase();
+  const map = {
+    jpg:'image/jpeg',jpeg:'image/jpeg',png:'image/png',gif:'image/gif',webp:'image/webp',svg:'image/svg+xml',bmp:'image/bmp',
+    mp4:'video/mp4',webm:'video/webm',
+    mp3:'audio/mpeg',wav:'audio/wav',ogg:'audio/ogg',
+    pdf:'application/pdf',
+    json:'application/json',xml:'application/xml',js:'application/javascript',
+    txt:'text/plain',md:'text/plain',csv:'text/csv',html:'text/html',css:'text/css',
+  };
+  return map[ext] || '';
+}
+
+function isPreviewable(filename, contentType) {
+  const ct = contentType || guessContentType(filename);
+  const ext = (filename || '').split('.').pop().toLowerCase();
+  if (PREVIEW_IMAGE.includes(ct)) return true;
+  if (PREVIEW_VIDEO.includes(ct)) return true;
+  if (PREVIEW_AUDIO.includes(ct)) return true;
+  if (PREVIEW_PDF.includes(ct)) return true;
+  if (ct.startsWith('text/')) return true;
+  if (PREVIEW_TEXT_TYPES.includes(ct)) return true;
+  if (PREVIEW_TEXT_EXT.includes(ext)) return true;
+  return false;
+}
+
+function getPreviewType(filename, contentType) {
+  const ct = contentType || guessContentType(filename);
+  const ext = (filename || '').split('.').pop().toLowerCase();
+  if (PREVIEW_IMAGE.includes(ct)) return 'image';
+  if (PREVIEW_VIDEO.includes(ct)) return 'video';
+  if (PREVIEW_AUDIO.includes(ct)) return 'audio';
+  if (PREVIEW_PDF.includes(ct)) return 'pdf';
+  if (ct.startsWith('text/') || PREVIEW_TEXT_TYPES.includes(ct) || PREVIEW_TEXT_EXT.includes(ext)) return 'text';
+  return null;
+}
+
+async function openPreview(code, filename, contentType) {
+  const modal = $('#previewModal');
+  const content = $('#previewContent');
+  modal.classList.remove('hidden');
+  document.body.style.overflow = 'hidden';
+  $('#previewTitle').textContent = filename;
+  content.innerHTML = `<p class="text-gray-400 dark:text-gray-500 text-sm">${t('loading')}</p>`;
+
+  const downloadUrl = `/api/download/${code}`;
+  $('#previewDownloadBtn').href = downloadUrl;
+  $('#previewDownloadBtn').download = filename;
+
+  const type = getPreviewType(filename, contentType);
+
+  try {
+    if (type === 'image') {
+      const img = document.createElement('img');
+      img.src = downloadUrl;
+      img.className = 'max-w-full max-h-full rounded-lg shadow-lg object-contain';
+      img.onload = () => { content.innerHTML = ''; content.appendChild(img); };
+      img.onerror = () => { content.innerHTML = `<p class="text-red-400 text-sm">${t('previewNotSupported')}</p>`; };
+    } else if (type === 'video') {
+      content.innerHTML = `<video controls autoplay class="max-w-full max-h-full rounded-lg shadow-lg"><source src="${downloadUrl}" type="${contentType}"></video>`;
+    } else if (type === 'audio') {
+      content.innerHTML = `<div class="bg-white dark:bg-gray-800 rounded-2xl p-8 shadow-lg text-center space-y-4">
+        <svg class="w-16 h-16 mx-auto text-brand-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3"></path></svg>
+        <p class="text-sm font-medium">${filename}</p>
+        <audio controls autoplay class="w-full"><source src="${downloadUrl}" type="${contentType}"></audio>
+      </div>`;
+    } else if (type === 'pdf') {
+      content.innerHTML = `<iframe src="${downloadUrl}" class="w-full h-full rounded-lg border-0" style="min-height:80vh"></iframe>`;
+    } else if (type === 'text') {
+      const res = await fetch(downloadUrl);
+      if (!res.ok) throw new Error('fetch failed');
+      const text = await res.text();
+      const pre = document.createElement('pre');
+      pre.className = 'w-full max-h-full overflow-auto bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4 text-xs font-mono text-gray-800 dark:text-gray-200 whitespace-pre-wrap break-words';
+      pre.textContent = text.slice(0, 500000);
+      content.innerHTML = '';
+      content.appendChild(pre);
+    } else {
+      content.innerHTML = `<p class="text-gray-400 dark:text-gray-500 text-sm">${t('previewNotSupported')}</p>`;
+    }
+  } catch (e) {
+    content.innerHTML = `<p class="text-red-400 text-sm">${t('serverError')}</p>`;
+  }
+}
+
+function closePreview() {
+  $('#previewModal').classList.add('hidden');
+  $('#previewContent').innerHTML = '';
+  document.body.style.overflow = '';
+}

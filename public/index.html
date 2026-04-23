@@ -131,7 +131,10 @@
           </div>
         </div>
         <div id="recvWarn" class="hidden rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 p-3 text-xs text-amber-700 dark:text-amber-300" data-t="oneTimeWarn">该文件设置了下载一次后自动删除，请确认后再下载。</div>
-        <a id="btnDownload" href="#" class="block w-full text-center py-2.5 rounded-xl bg-brand-600 hover:bg-brand-700 text-white font-medium text-sm transition shadow-sm" data-t="download">下载</a>
+        <div class="flex gap-2">
+          <button id="btnPreview" class="hidden flex-1 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-medium text-sm transition shadow-sm" data-t="preview">预览</button>
+          <a id="btnDownload" href="#" class="flex-1 text-center py-2.5 rounded-xl bg-brand-600 hover:bg-brand-700 text-white font-medium text-sm transition shadow-sm" data-t="download">下载</a>
+        </div>
       </div>
     </section>
   </main>
@@ -139,6 +142,24 @@
   <footer class="text-center text-xs text-gray-400 dark:text-gray-600 py-6">
     EasyDrop — Cloudflare Pages + KV
   </footer>
+
+  <!-- Preview Modal -->
+  <div id="previewModal" class="fixed inset-0 z-40 hidden">
+    <div class="absolute inset-0 bg-black/70 backdrop-blur-sm" id="previewBackdrop"></div>
+    <div class="relative z-10 flex flex-col h-full">
+      <div class="flex items-center justify-between px-4 py-3 bg-white/90 dark:bg-gray-900/90 backdrop-blur border-b border-gray-200 dark:border-gray-700">
+        <p id="previewTitle" class="text-sm font-medium truncate"></p>
+        <div class="flex items-center gap-2 shrink-0">
+          <a id="previewDownloadBtn" href="#" class="px-3 py-1.5 rounded-md text-xs font-medium bg-brand-600 hover:bg-brand-700 text-white transition" data-t="download">下载</a>
+          <button id="previewClose" class="p-1.5 rounded-md hover:bg-gray-200 dark:hover:bg-gray-700 transition">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+          </button>
+        </div>
+      </div>
+      <div id="previewContent" class="flex-1 overflow-auto flex items-center justify-center p-4">
+      </div>
+    </div>
+  </div>
 
   <div id="toast" class="fixed bottom-6 left-1/2 -translate-x-1/2 px-4 py-2 rounded-lg bg-gray-900 dark:bg-white text-white dark:text-gray-900 text-sm font-medium shadow-lg transition-opacity opacity-0 pointer-events-none z-50"></div>
 
