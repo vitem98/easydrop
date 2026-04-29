@@ -1,4 +1,6 @@
 export const MAX_FILE_SIZE = 25 * 1024 * 1024; // 25 MB — KV value size limit on free plan
+export const MAX_FILE_COUNT = 10;
+export const MAX_TOTAL_UPLOAD_SIZE = 25 * 1024 * 1024;
 export const TTL_OPTIONS = { "3600": 3600, "86400": 86400, "604800": 604800 };
 export const CODE_RETRIES = 10;
 

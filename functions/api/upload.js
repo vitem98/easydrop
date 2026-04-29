@@ -1,5 +1,7 @@
 import {
   MAX_FILE_SIZE,
+  MAX_FILE_COUNT,
+  MAX_TOTAL_UPLOAD_SIZE,
   TTL_OPTIONS,
   nowSec,
   sanitizeFilename,
@@ -23,14 +25,29 @@ export async function onRequestPost(context) {
     return err("Failed to parse form data");
   }
 
-  const file = form.get("file");
-  if (!file || typeof file !== "object" || !file.name) {
-    return err('Missing field "file"');
+  const files = [...form.getAll("files"), ...form.getAll("file")]
+    .filter((item) => item && typeof item === "object" && item.name);
+  if (!files.length) {
+    return err('Missing field "files"');
   }
 
   const maxSize = parseInt(env.MAX_FILE_SIZE, 10) || MAX_FILE_SIZE;
-  if (file.size > maxSize) {
-    return err(`File exceeds ${Math.round(maxSize / 1024 / 1024)} MB limit`, 413);
+  const maxFileCount = parseInt(env.MAX_FILE_COUNT, 10) || MAX_FILE_COUNT;
+  const maxTotalSize = parseInt(env.MAX_TOTAL_UPLOAD_SIZE, 10) || MAX_TOTAL_UPLOAD_SIZE;
+
+  if (files.length > maxFileCount) {
+    return err(`Too many files. Max ${maxFileCount} files`, 413);
+  }
+
+  for (const file of files) {
+    if (file.size > maxSize) {
+      return err(`${file.name} exceeds ${Math.round(maxSize / 1024 / 1024)} MB limit`, 413);
+    }
+  }
+
+  const totalSize = files.reduce((sum, file) => sum + file.size, 0);
+  if (totalSize > maxTotalSize) {
+    return err(`Total upload exceeds ${Math.round(maxTotalSize / 1024 / 1024)} MB limit`, 413);
   }
 
   const ttlStr = form.get("ttl") || "86400";
@@ -47,22 +64,34 @@ export async function onRequestPost(context) {
     return err("Could not generate unique code, try again", 429);
   }
 
-  const filename = sanitizeFilename(file.name);
-  const contentType = file.type || "application/octet-stream";
+  const fileMetas = files.map((file, index) => ({
+    index,
+    filename: sanitizeFilename(file.name),
+    contentType: file.type || "application/octet-stream",
+    size: file.size,
+  }));
 
   // Store file bytes in KV
+  const storedKeys = [];
   try {
-    const fileData = await file.arrayBuffer();
-    await env.STORE.put(`file:${code}`, fileData, { expirationTtl: ttlSec });
+    for (let i = 0; i < files.length; i++) {
+      const fileData = await files[i].arrayBuffer();
+      const key = `file:${code}:${i}`;
+      await env.STORE.put(key, fileData, { expirationTtl: ttlSec });
+      storedKeys.push(key);
+    }
   } catch (e) {
+    await Promise.all(storedKeys.map((key) => env.STORE.delete(key).catch(() => {})));
     return err("Storage error", 500);
   }
 
   // Store metadata in KV
   const meta = {
-    filename,
-    contentType,
-    size: file.size,
+    filename: files.length === 1 ? fileMetas[0].filename : `${files.length} files`,
+    contentType: files.length === 1 ? fileMetas[0].contentType : "application/octet-stream",
+    size: totalSize,
+    fileCount: files.length,
+    files: fileMetas,
     expiresAt,
     oneTime,
     createdAt: nowSec(),
@@ -72,9 +101,17 @@ export async function onRequestPost(context) {
     await env.STORE.put(`meta:${code}`, JSON.stringify(meta), { expirationTtl: ttlSec });
   } catch (e) {
     // Rollback: delete orphan file data
-    await env.STORE.delete(`file:${code}`).catch(() => {});
+    await Promise.all(storedKeys.map((key) => env.STORE.delete(key).catch(() => {})));
     return err("Failed to register code", 500);
   }
 
-  return json({ code, expiresAt, oneTime, filename, size: file.size });
+  return json({
+    code,
+    expiresAt,
+    oneTime,
+    filename: meta.filename,
+    size: totalSize,
+    fileCount: files.length,
+    files: fileMetas,
+  });
 }

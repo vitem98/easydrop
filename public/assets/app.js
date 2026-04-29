@@ -2,8 +2,8 @@ const i18n = {
   en: {
     send: "Send",
     receive: "Receive",
-    dropHint: "Drag & drop a file here, or click to select",
-    maxSize: "Max 25 MB",
+    dropHint: "Drag & drop files here, or click to select",
+    maxSize: "Max 25 MB per file",
     ttlLabel: "Keep for",
     ttl1h: "1 hour",
     ttl1d: "1 day",
@@ -13,14 +13,14 @@ const i18n = {
     yourCode: "Your verification code",
     sendAnother: "Send another",
     enterCode: "Enter the 6-digit code",
-    checkFile: "Check file",
+    checkFile: "Check files",
     download: "Download",
-    oneTimeWarn: "This file will be deleted after downloading. Please confirm before proceeding.",
+    oneTimeWarn: "These files will be deleted after downloading. Please confirm before proceeding.",
     copied: "Copied!",
     uploadFailed: "Upload failed",
     fileNotFound: "Code not found or expired",
     serverError: "Server error",
-    selectFileFirst: "Please select a file first",
+    selectFileFirst: "Please select at least one file first",
     fillCode: "Please enter the full 6-digit code",
     preview: "Preview",
     previewNotSupported: "Preview not supported for this file type",
@@ -30,7 +30,7 @@ const i18n = {
     send: "发送",
     receive: "接收",
     dropHint: "拖拽文件到此处，或点击选择",
-    maxSize: "最大 25 MB",
+    maxSize: "单个文件最大 25 MB",
     ttlLabel: "保留时间",
     ttl1h: "1 小时",
     ttl1d: "1 天",
@@ -42,12 +42,12 @@ const i18n = {
     enterCode: "输入 6 位验证码",
     checkFile: "查询文件",
     download: "下载",
-    oneTimeWarn: "该文件设置了下载一次后自动删除，请确认后再下载。",
+    oneTimeWarn: "这些文件设置了下载一次后自动删除，请确认后再下载。",
     copied: "已复制！",
     uploadFailed: "上传失败",
     fileNotFound: "验证码不存在或已过期",
     serverError: "服务器错误",
-    selectFileFirst: "请先选择文件",
+    selectFileFirst: "请先选择至少一个文件",
     fillCode: "请输入完整的 6 位验证码",
     preview: "预览",
     previewNotSupported: "该文件类型不支持预览",
@@ -56,7 +56,7 @@ const i18n = {
 };
 
 let currentLang = "zh";
-let currentFile = null;
+let currentFiles = [];
 
 function $(sel) { return document.querySelector(sel); }
 function $$(sel) { return document.querySelectorAll(sel); }
@@ -110,6 +110,33 @@ function formatSize(bytes) {
   return (bytes / (1024 * 1024)).toFixed(2) + ' MB';
 }
 
+function formatFileCount(count) {
+  return currentLang === 'zh' ? `${count} 个文件` : `${count} file${count === 1 ? '' : 's'}`;
+}
+
+function getTotalSize(files) {
+  return files.reduce((sum, file) => sum + (Number(file.size) || 0), 0);
+}
+
+function normalizeReceivedFiles(data) {
+  const files = Array.isArray(data.files) && data.files.length
+    ? data.files
+    : [{ index: 0, filename: data.filename, size: data.size, contentType: data.contentType }];
+  return files.map((file, index) => {
+    const rawIndex = Number(file.index);
+    return {
+      index: Number.isInteger(rawIndex) ? rawIndex : index,
+      filename: file.filename || `${currentLang === 'zh' ? '文件' : 'file'}-${index + 1}`,
+      size: Number(file.size) || 0,
+      contentType: file.contentType || '',
+    };
+  });
+}
+
+function getDownloadUrl(code, index = 0) {
+  return `/api/download/${encodeURIComponent(code)}?file=${encodeURIComponent(index)}`;
+}
+
 function switchTab(name) {
   $$('.tab-btn').forEach(btn => {
     const active = btn.dataset.tab === name;
@@ -129,21 +156,41 @@ function switchTab(name) {
   }
 }
 
-function showFileInfo(file) {
-  currentFile = file;
-  $('#fileName').textContent = file.name;
-  $('#fileSize').textContent = formatSize(file.size);
+function showFileInfo(fileList) {
+  const files = Array.from(fileList || []).filter(file => file && file.name);
+  if (!files.length) return;
+  currentFiles = files;
+  const totalSize = getTotalSize(files);
+  $('#fileName').textContent = files.length === 1 ? files[0].name : formatFileCount(files.length);
+  $('#fileSize').textContent = files.length === 1 ? formatSize(files[0].size) : `${currentLang === 'zh' ? '总计' : 'Total'} ${formatSize(totalSize)}`;
+  const fileListEl = $('#fileList');
+  fileListEl.innerHTML = '';
+  files.forEach((file) => {
+    const row = document.createElement('div');
+    row.className = 'flex justify-between gap-3';
+    const name = document.createElement('span');
+    name.className = 'truncate';
+    name.textContent = file.name;
+    const size = document.createElement('span');
+    size.className = 'shrink-0';
+    size.textContent = formatSize(file.size);
+    row.append(name, size);
+    fileListEl.appendChild(row);
+  });
+  fileListEl.classList.toggle('hidden', files.length <= 1);
   $('#fileInfo').classList.remove('hidden');
   $('#dropzone').classList.add('hidden');
   $('#btnUpload').disabled = false;
 }
 
 function clearFile() {
-  currentFile = null;
+  currentFiles = [];
   $('#fileInfo').classList.add('hidden');
   $('#dropzone').classList.remove('hidden');
   $('#btnUpload').disabled = true;
   $('#fileInput').value = '';
+  $('#fileList').innerHTML = '';
+  $('#fileList').classList.add('hidden');
 }
 
 function resetUploadUI() {
@@ -172,7 +219,7 @@ function generateQR(url) {
 }
 
 function doUpload() {
-  if (!currentFile) {
+  if (!currentFiles.length) {
     toast(t('selectFileFirst'));
     return;
   }
@@ -180,7 +227,7 @@ function doUpload() {
   $('#uploadProgress').classList.remove('hidden');
 
   const fd = new FormData();
-  fd.append('file', currentFile);
+  currentFiles.forEach(file => fd.append('files', file));
   fd.append('ttl', $('#ttl').value);
   fd.append('oneTime', $('#oneTime').checked ? '1' : '0');
 
@@ -200,8 +247,11 @@ function doUpload() {
     if (xhr.status >= 200 && xhr.status < 300) {
       try {
         const data = JSON.parse(xhr.responseText);
+        const files = normalizeReceivedFiles(data);
+        const totalSize = typeof data.size === 'number' ? data.size : getTotalSize(files);
+        const label = files.length === 1 ? files[0].filename : formatFileCount(files.length);
         $('#resultCode').textContent = data.code;
-        $('#resultMeta').textContent = `${data.filename} · ${formatSize(data.size)} · ${new Date(data.expiresAt * 1000).toLocaleString()}`;
+        $('#resultMeta').textContent = `${label} · ${formatSize(totalSize)} · ${new Date(data.expiresAt * 1000).toLocaleString()}`;
         $('#uploadResult').classList.remove('hidden');
         const url = `${window.location.origin}/?code=${encodeURIComponent(data.code)}`;
         generateQR(url);
@@ -245,6 +295,74 @@ function fillCodeInputs(code) {
   }
 }
 
+function renderReceiveFileList(code, files) {
+  const list = $('#recvFileList');
+  list.innerHTML = '';
+  files.forEach((file) => {
+    const item = document.createElement('div');
+    item.className = 'rounded-xl border border-gray-200 dark:border-gray-700 p-3 space-y-2';
+    const head = document.createElement('div');
+    head.className = 'flex justify-between gap-3 text-sm';
+    const name = document.createElement('span');
+    name.className = 'truncate font-medium';
+    name.textContent = file.filename;
+    const size = document.createElement('span');
+    size.className = 'shrink-0 text-xs text-gray-500 dark:text-gray-400';
+    size.textContent = formatSize(file.size);
+    head.append(name, size);
+
+    const actions = document.createElement('div');
+    actions.className = 'flex gap-2';
+    const previewable = isPreviewable(file.filename, file.contentType);
+    if (previewable) {
+      const preview = document.createElement('button');
+      preview.type = 'button';
+      preview.className = 'flex-1 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-medium transition';
+      preview.textContent = t('preview');
+      preview.addEventListener('click', () => openPreview(code, file.filename, file.contentType || guessContentType(file.filename), file.index));
+      actions.appendChild(preview);
+    }
+
+    const download = document.createElement('a');
+    download.href = getDownloadUrl(code, file.index);
+    download.download = file.filename;
+    download.className = 'flex-1 text-center py-2 rounded-lg bg-brand-600 hover:bg-brand-700 text-white text-xs font-medium transition';
+    download.textContent = t('download');
+    actions.appendChild(download);
+
+    item.append(head, actions);
+    list.appendChild(item);
+  });
+}
+
+function renderReceiveInfo(code, data) {
+  const files = normalizeReceivedFiles(data);
+  const totalSize = typeof data.size === 'number' ? data.size : getTotalSize(files);
+  const isMulti = files.length > 1;
+  const expiry = new Date(data.expiresAt * 1000).toLocaleString();
+  $('#recvFilename').textContent = isMulti ? formatFileCount(files.length) : files[0].filename;
+  $('#recvMeta').textContent = `${formatSize(totalSize)} · ${expiry}${data.oneTime ? ' · ' + (currentLang === 'zh' ? '一次性' : 'One-time') : ''}`;
+  $('#recvWarn').classList.toggle('hidden', !data.oneTime);
+  $('#recvActions').classList.toggle('hidden', isMulti);
+  $('#recvFileList').classList.toggle('hidden', !isMulti);
+  if (isMulti) {
+    renderReceiveFileList(code, files);
+  } else {
+    $('#recvFileList').innerHTML = '';
+    $('#btnDownload').href = getDownloadUrl(code, files[0].index);
+    $('#btnDownload').download = files[0].filename;
+    const previewable = isPreviewable(files[0].filename, files[0].contentType);
+    $('#btnPreview').classList.toggle('hidden', !previewable);
+    if (previewable) {
+      $('#btnPreview').dataset.code = code;
+      $('#btnPreview').dataset.filename = files[0].filename;
+      $('#btnPreview').dataset.contentType = files[0].contentType || guessContentType(files[0].filename);
+      $('#btnPreview').dataset.index = String(files[0].index);
+    }
+  }
+  $('#receiveInfo').classList.remove('hidden');
+}
+
 async function fetchFileInfo() {
   const code = getCodeFromInputs();
   if (!/^\d{6}$/.test(code)) {
@@ -261,21 +379,8 @@ async function fetchFileInfo() {
       return;
     }
     const data = await res.json();
-    $('#recvFilename').textContent = data.filename;
-    const expiry = new Date(data.expiresAt * 1000).toLocaleString();
-    $('#recvMeta').textContent = `${formatSize(data.size)} · ${expiry}${data.oneTime ? ' · ' + (currentLang === 'zh' ? '一次性' : 'One-time') : ''}`;
-    $('#recvWarn').classList.toggle('hidden', !data.oneTime);
-    $('#btnDownload').href = `/api/download/${code}`;
-    $('#btnDownload').download = data.filename;
-    $('#receiveInfo').classList.remove('hidden');
     // Show preview button for supported types
-    const previewable = isPreviewable(data.filename, data.contentType);
-    $('#btnPreview').classList.toggle('hidden', !previewable);
-    if (previewable) {
-      $('#btnPreview').dataset.code = code;
-      $('#btnPreview').dataset.filename = data.filename;
-      $('#btnPreview').dataset.contentType = data.contentType || guessContentType(data.filename);
-    }
+    renderReceiveInfo(code, data);
   } catch {
     toast(t('serverError'));
   } finally {
@@ -317,8 +422,7 @@ async function fetchFileInfo() {
 
   $('#dropzone').addEventListener('click', () => $('#fileInput').click());
   $('#fileInput').addEventListener('change', (e) => {
-    const f = e.target.files[0];
-    if (f) showFileInfo(f);
+    if (e.target.files.length) showFileInfo(e.target.files);
   });
   $('#removeFile').addEventListener('click', clearFile);
   $('#btnUpload').addEventListener('click', doUpload);
@@ -346,8 +450,7 @@ async function fetchFileInfo() {
   dz.addEventListener('dragleave', () => dz.classList.remove('border-brand-500', 'bg-brand-50', 'dark:bg-brand-900/20'));
   dz.addEventListener('drop', (e) => {
     dz.classList.remove('border-brand-500', 'bg-brand-50', 'dark:bg-brand-900/20');
-    const f = e.dataTransfer.files[0];
-    if (f) showFileInfo(f);
+    if (e.dataTransfer.files.length) showFileInfo(e.dataTransfer.files);
   });
 
   // Code inputs
@@ -380,7 +483,7 @@ async function fetchFileInfo() {
   // Preview
   $('#btnPreview').addEventListener('click', () => {
     const btn = $('#btnPreview');
-    openPreview(btn.dataset.code, btn.dataset.filename, btn.dataset.contentType);
+    openPreview(btn.dataset.code, btn.dataset.filename, btn.dataset.contentType, Number(btn.dataset.index || 0));
   });
   $('#previewClose').addEventListener('click', closePreview);
   $('#previewBackdrop').addEventListener('click', closePreview);
@@ -435,7 +538,7 @@ function getPreviewType(filename, contentType) {
   return null;
 }
 
-async function openPreview(code, filename, contentType) {
+async function openPreview(code, filename, contentType, index = 0) {
   const modal = $('#previewModal');
   const content = $('#previewContent');
   modal.classList.remove('hidden');
@@ -443,7 +546,7 @@ async function openPreview(code, filename, contentType) {
   $('#previewTitle').textContent = filename;
   content.innerHTML = `<p class="text-gray-400 dark:text-gray-500 text-sm">${t('loading')}</p>`;
 
-  const downloadUrl = `/api/download/${code}`;
+  const downloadUrl = getDownloadUrl(code, index);
   $('#previewDownloadBtn').href = downloadUrl;
   $('#previewDownloadBtn').download = filename;
 

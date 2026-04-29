@@ -9,6 +9,17 @@ function checkAuth(request, env) {
   return null;
 }
 
+function getFileKeys(code, meta) {
+  const keys = new Set([`file:${code}`]);
+  if (Array.isArray(meta.files) && meta.files.length) {
+    meta.files.forEach((file, index) => {
+      const fileIndex = Number.isInteger(file.index) ? file.index : index;
+      keys.add(`file:${code}:${fileIndex}`);
+    });
+  }
+  return [...keys];
+}
+
 export async function onRequestPost(context) {
   const { request, env } = context;
 
@@ -27,14 +38,23 @@ export async function onRequestPost(context) {
     return err("Invalid code");
   }
 
-  const meta = await env.STORE.get(`meta:${code}`);
-  if (!meta) {
+  const raw = await env.STORE.get(`meta:${code}`);
+  if (!raw) {
     return err("Code not found", 404);
   }
 
+  let meta;
+  try {
+    meta = JSON.parse(raw);
+  } catch (e) {
+    meta = {};
+  }
+
+  const fileKeys = getFileKeys(code, meta);
+
   await Promise.all([
     env.STORE.delete(`meta:${code}`).catch(() => {}),
-    env.STORE.delete(`file:${code}`).catch(() => {}),
+    ...fileKeys.map((key) => env.STORE.delete(key).catch(() => {})),
   ]);
 
   return json({ ok: true, deleted: code });
