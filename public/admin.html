@@ -70,16 +70,23 @@
             <p class="text-xs text-gray-500 dark:text-gray-400" id="r2-count">0 个对象</p>
           </div>
           <p class="mt-3 text-2xl font-bold text-emerald-600"><span id="r2-used">-</span> <span class="text-sm font-medium text-gray-400">/ <span id="r2-limit">10 GB</span></span></p>
-          <div class="mt-3 h-2 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
-            <div id="r2-bar" class="h-full bg-emerald-600" style="width:0%"></div>
+          <div class="mt-3 h-2 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden flex">
+            <div id="r2-bar-easydrop" class="h-full bg-emerald-500" style="width:0%"></div>
+            <div id="r2-bar-other" class="h-full bg-amber-500" style="width:0%"></div>
           </div>
           <div class="mt-3 space-y-1.5 text-sm">
-            <div class="flex justify-between gap-3">
-              <span>EasyDrop</span>
+            <div class="flex justify-between gap-3 items-center">
+              <span class="flex items-center gap-2">
+                <span class="w-2 h-2 rounded-full bg-emerald-500"></span>
+                EasyDrop
+              </span>
               <span id="r2-easydrop" class="text-gray-500 dark:text-gray-400">-</span>
             </div>
-            <div class="flex justify-between gap-3">
-              <span>其他</span>
+            <div class="flex justify-between gap-3 items-center">
+              <span class="flex items-center gap-2">
+                <span class="w-2 h-2 rounded-full bg-amber-500"></span>
+                其他
+              </span>
               <span id="r2-other" class="text-gray-500 dark:text-gray-400">-</span>
             </div>
           </div>
@@ -315,8 +322,13 @@
     function renderR2Split(r2) {
       const own = r2?.easydrop || {};
       const other = r2?.other || {};
+      const limit = Number(r2?.limit) || 0;
+      const ownPct = limit > 0 ? Math.min(100, ((Number(own.used) || 0) / limit) * 100) : 0;
+      const otherPct = limit > 0 ? Math.min(100 - ownPct, ((Number(other.used) || 0) / limit) * 100) : 0;
       $('#r2-easydrop').textContent = `${formatSize(own.used)} · ${own.count || 0} 个对象`;
       $('#r2-other').textContent = `${formatSize(other.used)} · ${other.count || 0} 个对象`;
+      $('#r2-bar-easydrop').style.width = (ownPct > 0 ? Math.max(ownPct, 0.6) : 0) + '%';
+      $('#r2-bar-other').style.width = (otherPct > 0 ? Math.max(otherPct, 0.6) : 0) + '%';
     }
 
     function escAttr(value) {
@@ -367,7 +379,8 @@
       $('#' + prefix + '-limit').textContent = formatSize(limit);
       $('#' + prefix + '-count').textContent = count + ' 个对象';
       $('#' + prefix + '-pct').textContent = (pct >= 10 ? pct.toFixed(0) : pct.toFixed(1)) + '%';
-      $('#' + prefix + '-bar').style.width = Math.max(pct > 0 ? 0.8 : 0, pct) + '%';
+      const bar = $('#' + prefix + '-bar');
+      if (bar) bar.style.width = Math.max(pct > 0 ? 0.8 : 0, pct) + '%';
     }
 
     function escHtml(s) {
