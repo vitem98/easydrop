@@ -2,12 +2,17 @@ name = "easydrop"
 compatibility_date = "2025-04-01"
 pages_build_output_dir = "./public"
 
-# 1. npx wrangler kv namespace create STORE
-# 2. copy the returned id into the line below:
+# Existing KV namespace titled STORE.
 [[kv_namespaces]]
 binding = "STORE"
-id = "YOUR_KV_NAMESPACE_ID"
+id = "8962b456717b4fcba694e117f91aa18c"
+
+# Files larger than 25 MB are stored here.
+[[r2_buckets]]
+binding = "BUCKET"
+bucket_name = "easydrop"
 
 [vars]
-MAX_FILE_SIZE = "26214400"
+# Hard ceiling for one request. Objects <= 25 MB stay in KV.
+MAX_FILE_SIZE = "104857600"
 ADMIN_PASSWORD = "YOUR_ADMIN_PASSWORD"

@@ -1,13 +1,4 @@
-import { json, err } from "../../_shared.js";
-
-function checkAuth(request, env) {
-  const header = request.headers.get("Authorization") || "";
-  const token = header.replace(/^Bearer\s+/i, "");
-  if (!env.ADMIN_PASSWORD || token !== env.ADMIN_PASSWORD) {
-    return err("Unauthorized", 401);
-  }
-  return null;
-}
+import { json, requireAdmin, storageSummary, sweepExpiredR2 } from "../../_shared.js";
 
 function normalizeFiles(meta) {
   if (Array.isArray(meta.files) && meta.files.length) {
@@ -16,6 +7,7 @@ function normalizeFiles(meta) {
       filename: file.filename,
       size: file.size,
       contentType: file.contentType,
+      storage: file.storage === "r2" ? "r2" : "kv",
     }));
   }
 
@@ -24,14 +16,17 @@ function normalizeFiles(meta) {
     filename: meta.filename,
     size: meta.size,
     contentType: meta.contentType,
+    storage: meta.storage === "r2" ? "r2" : "kv",
   }];
 }
 
 export async function onRequestGet(context) {
   const { request, env } = context;
 
-  const denied = checkAuth(request, env);
+  const denied = requireAdmin(request, env);
   if (denied) return denied;
+
+  await sweepExpiredR2(env);
 
   // List all meta: keys from KV
   const files = [];
@@ -61,6 +56,8 @@ export async function onRequestGet(context) {
             expiresAt: meta.expiresAt,
             oneTime: meta.oneTime,
             createdAt: meta.createdAt,
+            kind: meta.kind === "text" ? "text" : "file",
+            storage: storageSummary(meta),
           });
           totalSize += size || 0;
           totalFileCount += fileMetas.length;

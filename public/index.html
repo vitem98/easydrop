@@ -45,10 +45,16 @@
 
     <!-- Send Tab -->
     <section id="panel-send" class="space-y-5">
+      <div class="flex gap-1 p-1 bg-gray-100 dark:bg-gray-800/80 rounded-xl">
+        <button type="button" id="mode-file" class="mode-btn flex-1 py-2 rounded-lg text-sm font-medium transition bg-white dark:bg-gray-700 shadow-sm" data-t="modeFile">文件</button>
+        <button type="button" id="mode-text" class="mode-btn flex-1 py-2 rounded-lg text-sm font-medium transition text-gray-500 dark:text-gray-400" data-t="modeText">文字</button>
+      </div>
+
+      <div id="panel-file" class="space-y-5">
       <div id="dropzone" class="border-2 border-dashed border-gray-300 dark:border-gray-700 rounded-2xl p-8 text-center transition hover:border-brand-500 hover:bg-brand-50 dark:hover:bg-brand-900/20 cursor-pointer">
         <svg class="w-12 h-12 mx-auto mb-3 text-gray-400 dark:text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path></svg>
         <p class="text-sm text-gray-600 dark:text-gray-300 mb-1" data-t="dropHint">拖拽文件到此处，或点击选择</p>
-        <p class="text-xs text-gray-400 dark:text-gray-500" data-t="maxSize">单个文件最大 25 MB</p>
+        <p class="text-xs text-gray-400 dark:text-gray-500" data-t="maxSize">25 MB 以内用 KV，超过后用 R2，单次最大 100 MB</p>
         <input type="file" id="fileInput" class="hidden" multiple />
       </div>
 
@@ -64,6 +70,18 @@
           </button>
         </div>
         <div id="fileList" class="hidden space-y-1 text-xs text-gray-500 dark:text-gray-400"></div>
+        <p id="storageHint" class="hidden text-xs text-brand-600 dark:text-brand-500"></p>
+      </div>
+      </div>
+
+      <div id="panel-text" class="hidden space-y-2">
+        <textarea id="clipText" rows="8" class="w-full rounded-2xl border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 px-4 py-3 text-sm leading-6 focus:outline-none focus:ring-2 focus:ring-brand-500" data-t-placeholder="textPlaceholder" placeholder="在这里粘贴文字，会生成 6 位验证码"></textarea>
+        <p class="text-xs text-gray-400 dark:text-gray-500" data-t="textHint">另一台电脑打开本页，输入验证码后点「粘贴文字」即可取回。</p>
+      </div>
+
+      <div>
+        <label class="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1.5" data-t="adminPassword">管理员密码</label>
+        <input id="adminPassword" type="password" autocomplete="current-password" class="w-full rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500" data-t-placeholder="adminPasswordPh" placeholder="上传文件和发送文字时需要" />
       </div>
 
       <div class="grid grid-cols-2 gap-4">
@@ -78,7 +96,7 @@
         <div class="flex items-end">
           <label class="flex items-center gap-2 cursor-pointer select-none">
             <input type="checkbox" id="oneTime" class="w-4 h-4 rounded border-gray-300 text-brand-600 focus:ring-brand-500" />
-            <span class="text-sm" data-t="oneTimeLabel">下载一次后自动删除</span>
+            <span id="oneTimeText" class="text-sm" data-t="oneTimeLabel">下载一次后自动删除</span>
           </label>
         </div>
       </div>
@@ -122,7 +140,10 @@
           <input type="text" maxlength="1" inputmode="numeric" class="code-input w-12 h-14 text-center text-2xl font-bold rounded-xl border-2 border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-900 focus:border-brand-500 focus:ring-2 focus:ring-brand-500/30 outline-none transition" />
           <input type="text" maxlength="1" inputmode="numeric" class="code-input w-12 h-14 text-center text-2xl font-bold rounded-xl border-2 border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-900 focus:border-brand-500 focus:ring-2 focus:ring-brand-500/30 outline-none transition" />
         </div>
-        <button id="btnFetch" class="w-full mt-5 py-2.5 rounded-xl bg-brand-600 hover:bg-brand-700 text-white font-medium text-sm transition shadow-sm disabled:opacity-50 disabled:cursor-not-allowed" data-t="checkFile">查询文件</button>
+        <div class="grid grid-cols-2 gap-2 mt-5">
+          <button id="btnFetch" class="py-2.5 rounded-xl bg-brand-600 hover:bg-brand-700 text-white font-medium text-sm transition shadow-sm disabled:opacity-50 disabled:cursor-not-allowed" data-t="checkFile">查询文件</button>
+          <button id="btnPaste" class="py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-medium text-sm transition shadow-sm disabled:opacity-50 disabled:cursor-not-allowed" data-t="pasteText">粘贴文字</button>
+        </div>
       </div>
 
       <div id="receiveInfo" class="hidden bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 p-5 space-y-3">
@@ -134,6 +155,10 @@
           </div>
         </div>
         <div id="recvFileList" class="hidden space-y-2"></div>
+        <div id="receiveText" class="hidden space-y-2">
+          <textarea id="recvText" readonly rows="8" class="w-full rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 px-3 py-3 text-sm leading-6"></textarea>
+          <button id="btnCopyText" type="button" class="w-full py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-medium text-sm transition shadow-sm" data-t="copyText">复制文字</button>
+        </div>
         <div id="recvWarn" class="hidden rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 p-3 text-xs text-amber-700 dark:text-amber-300" data-t="oneTimeWarn">该文件设置了下载一次后自动删除，请确认后再下载。</div>
         <div id="recvActions" class="flex gap-2">
           <button id="btnPreview" class="hidden flex-1 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-medium text-sm transition shadow-sm" data-t="preview">预览</button>
@@ -144,7 +169,7 @@
   </main>
 
   <footer class="text-center text-xs text-gray-400 dark:text-gray-600 py-6">
-    EasyDrop — Cloudflare Pages + KV
+    EasyDrop — Cloudflare Pages + KV / R2
   </footer>
 
   <!-- Preview Modal -->

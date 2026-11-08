@@ -1,92 +1,117 @@
 import {
-  MAX_FILE_SIZE,
+  KV_MAX_BYTES,
+  REQUEST_MAX_BYTES,
   MAX_FILE_COUNT,
-  MAX_TOTAL_UPLOAD_SIZE,
   TTL_OPTIONS,
   nowSec,
   sanitizeFilename,
   json,
   err,
+  requireAdmin,
   generateUniqueCode,
+  deleteStoredItems,
+  rememberR2Objects,
+  sweepExpiredR2,
 } from "../_shared.js";
 
 export async function onRequestPost(context) {
   const { request, env } = context;
 
+  const denied = requireAdmin(request, env);
+  if (denied) return denied;
+
   const ct = request.headers.get("content-type") || "";
   if (!ct.includes("multipart/form-data")) {
-    return err("Expected multipart/form-data");
+    return err("请使用文件上传");
   }
 
   let form;
   try {
     form = await request.formData();
-  } catch (e) {
-    return err("Failed to parse form data");
+  } catch {
+    return err("无法解析上传内容");
   }
 
   const files = [...form.getAll("files"), ...form.getAll("file")]
-    .filter((item) => item && typeof item === "object" && item.name);
+    .filter((item) => item && typeof item === "object" && typeof item.arrayBuffer === "function" && item.name);
   if (!files.length) {
-    return err('Missing field "files"');
+    return err("请选择文件");
   }
 
-  const maxSize = parseInt(env.MAX_FILE_SIZE, 10) || MAX_FILE_SIZE;
-  const maxFileCount = parseInt(env.MAX_FILE_COUNT, 10) || MAX_FILE_COUNT;
-  const maxTotalSize = parseInt(env.MAX_TOTAL_UPLOAD_SIZE, 10) || MAX_TOTAL_UPLOAD_SIZE;
-
-  if (files.length > maxFileCount) {
-    return err(`Too many files. Max ${maxFileCount} files`, 413);
+  const hardMax = env.BUCKET ? REQUEST_MAX_BYTES : KV_MAX_BYTES;
+  if (files.length > MAX_FILE_COUNT) {
+    return err(`文件过多，最多 ${MAX_FILE_COUNT} 个`, 413);
   }
 
   for (const file of files) {
-    if (file.size > maxSize) {
-      return err(`${file.name} exceeds ${Math.round(maxSize / 1024 / 1024)} MB limit`, 413);
+    if (file.size > hardMax) {
+      const limitMb = Math.round(hardMax / 1024 / 1024);
+      return err(`${file.name} 超过 ${limitMb} MB 限制`, 413);
+    }
+    if (file.size > KV_MAX_BYTES && !env.BUCKET) {
+      return err(`${file.name} 超过 25 MB，需要先配置 R2`, 413);
     }
   }
 
   const totalSize = files.reduce((sum, file) => sum + file.size, 0);
-  if (totalSize > maxTotalSize) {
-    return err(`Total upload exceeds ${Math.round(maxTotalSize / 1024 / 1024)} MB limit`, 413);
+  if (totalSize > REQUEST_MAX_BYTES) {
+    return err("单次上传不能超过 100 MB", 413);
   }
 
   const ttlStr = form.get("ttl") || "86400";
   const ttlSec = TTL_OPTIONS[ttlStr];
   if (!ttlSec) {
-    return err("Invalid ttl. Use 3600, 86400 or 604800");
+    return err("保留时间无效，请选择 1 小时、1 天或 7 天");
   }
 
   const oneTime = form.get("oneTime") === "1" || form.get("oneTime") === "true";
   const expiresAt = nowSec() + ttlSec;
 
+  await sweepExpiredR2(env);
+
   const code = await generateUniqueCode(env);
   if (!code) {
-    return err("Could not generate unique code, try again", 429);
+    return err("验证码生成失败，请重试", 429);
   }
 
-  const fileMetas = files.map((file, index) => ({
-    index,
-    filename: sanitizeFilename(file.name),
-    contentType: file.type || "application/octet-stream",
-    size: file.size,
-  }));
+  const fileMetas = [];
+  const stored = [];
+  const r2Entries = [];
 
-  // Store file bytes in KV
-  const storedKeys = [];
   try {
     for (let i = 0; i < files.length; i++) {
-      const fileData = await files[i].arrayBuffer();
+      const file = files[i];
+      const storage = file.size > KV_MAX_BYTES ? "r2" : "kv";
+      const meta = {
+        index: i,
+        filename: sanitizeFilename(file.name),
+        contentType: file.type || "application/octet-stream",
+        size: file.size,
+        storage,
+      };
       const key = `file:${code}:${i}`;
-      await env.STORE.put(key, fileData, { expirationTtl: ttlSec });
-      storedKeys.push(key);
+
+      if (storage === "r2") {
+        await env.BUCKET.put(key, file, {
+          httpMetadata: { contentType: meta.contentType },
+        });
+        r2Entries.push({ key, expiresAt });
+      } else {
+        await env.STORE.put(key, await file.arrayBuffer(), { expirationTtl: ttlSec });
+      }
+
+      stored.push({ key, storage });
+      fileMetas.push(meta);
     }
-  } catch (e) {
-    await Promise.all(storedKeys.map((key) => env.STORE.delete(key).catch(() => {})));
-    return err("Storage error", 500);
+
+    await rememberR2Objects(env, r2Entries);
+  } catch {
+    await deleteStoredItems(env, stored);
+    return err("存储失败", 500);
   }
 
-  // Store metadata in KV
   const meta = {
+    kind: "file",
     filename: files.length === 1 ? fileMetas[0].filename : `${files.length} files`,
     contentType: files.length === 1 ? fileMetas[0].contentType : "application/octet-stream",
     size: totalSize,
@@ -99,16 +124,16 @@ export async function onRequestPost(context) {
 
   try {
     await env.STORE.put(`meta:${code}`, JSON.stringify(meta), { expirationTtl: ttlSec });
-  } catch (e) {
-    // Rollback: delete orphan file data
-    await Promise.all(storedKeys.map((key) => env.STORE.delete(key).catch(() => {})));
-    return err("Failed to register code", 500);
+  } catch {
+    await deleteStoredItems(env, stored);
+    return err("验证码登记失败", 500);
   }
 
   return json({
     code,
     expiresAt,
     oneTime,
+    kind: "file",
     filename: meta.filename,
     size: totalSize,
     fileCount: files.length,

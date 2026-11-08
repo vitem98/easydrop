@@ -3,7 +3,24 @@ const i18n = {
     send: "Send",
     receive: "Receive",
     dropHint: "Drag & drop files here, or click to select",
-    maxSize: "Max 25 MB per file",
+    maxSize: "KV up to 25 MB, R2 above that, 100 MB per upload",
+    modeFile: "File",
+    modeText: "Text",
+    textPlaceholder: "Paste text here to get a 6-digit code",
+    textHint: "On the other computer, enter the code and click Paste text.",
+    adminPassword: "Admin password",
+    adminPasswordPh: "Required to upload files or send text",
+    passwordRequired: "Enter the admin password first",
+    passwordWrong: "Wrong admin password",
+    textEmpty: "Paste some text first",
+    textTooLong: "Text is larger than 1 MB",
+    tooLarge: "A file or the total upload is larger than 100 MB",
+    usesR2: "Files over 25 MB will be stored in R2",
+    pasteText: "Paste text",
+    copyText: "Copy text",
+    usePaste: "This code is text. Click Paste text.",
+    useCheck: "This code is a file. Click Check files.",
+    oneTimeText: "Delete after it is read once",
     ttlLabel: "Keep for",
     ttl1h: "1 hour",
     ttl1d: "1 day",
@@ -30,7 +47,24 @@ const i18n = {
     send: "发送",
     receive: "接收",
     dropHint: "拖拽文件到此处，或点击选择",
-    maxSize: "单个文件最大 25 MB",
+    maxSize: "25 MB 以内用 KV，超过后用 R2，单次最大 100 MB",
+    modeFile: "文件",
+    modeText: "文字",
+    textPlaceholder: "在这里粘贴文字，会生成 6 位验证码",
+    textHint: "另一台电脑打开本页，输入验证码后点「粘贴文字」即可取回。",
+    adminPassword: "管理员密码",
+    adminPasswordPh: "上传文件和发送文字时需要",
+    passwordRequired: "请先填写管理员密码",
+    passwordWrong: "管理员密码错误",
+    textEmpty: "请先粘贴文字",
+    textTooLong: "文字超过 1 MB",
+    tooLarge: "单个文件或本次上传超过 100 MB",
+    usesR2: "超过 25 MB 的文件会存到 R2",
+    pasteText: "粘贴文字",
+    copyText: "复制文字",
+    usePaste: "这是一段文字，请点「粘贴文字」",
+    useCheck: "这是文件，请点「查询文件」",
+    oneTimeText: "读取一次后自动删除",
     ttlLabel: "保留时间",
     ttl1h: "1 小时",
     ttl1d: "1 天",
@@ -57,6 +91,11 @@ const i18n = {
 
 let currentLang = "zh";
 let currentFiles = [];
+let sendMode = "file";
+let sending = false;
+const KV_LIMIT = 25 * 1024 * 1024;
+const REQUEST_LIMIT = 100 * 1024 * 1024;
+const TEXT_LIMIT = 1024 * 1024;
 
 function $(sel) { return document.querySelector(sel); }
 function $$(sel) { return document.querySelectorAll(sel); }
@@ -76,6 +115,7 @@ function applyLang() {
     const key = el.getAttribute('data-t-placeholder');
     el.placeholder = t(key);
   });
+  updateSendMode();
 }
 
 function toggleLang() {
@@ -104,6 +144,19 @@ function toast(msg) {
   setTimeout(() => el.classList.add('opacity-0'), 2000);
 }
 
+function getAdminPassword() {
+  return $('#adminPassword')?.value.trim() || "";
+}
+
+function rememberPassword() {
+  const password = getAdminPassword();
+  if (password) sessionStorage.setItem('admin-token', password);
+}
+
+function byteLength(text) {
+  return new TextEncoder().encode(text).length;
+}
+
 function formatSize(bytes) {
   if (bytes < 1024) return bytes + ' B';
   if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
@@ -129,6 +182,7 @@ function normalizeReceivedFiles(data) {
       filename: file.filename || `${currentLang === 'zh' ? '文件' : 'file'}-${index + 1}`,
       size: Number(file.size) || 0,
       contentType: file.contentType || '',
+      storage: file.storage === 'r2' ? 'r2' : 'kv',
     };
   });
 }
@@ -173,14 +227,19 @@ function showFileInfo(fileList) {
     name.textContent = file.name;
     const size = document.createElement('span');
     size.className = 'shrink-0';
-    size.textContent = formatSize(file.size);
+    size.textContent = formatSize(file.size) + (file.size > KV_LIMIT ? ' · R2' : '');
     row.append(name, size);
     fileListEl.appendChild(row);
   });
   fileListEl.classList.toggle('hidden', files.length <= 1);
+  const usesR2 = files.some(file => file.size > KV_LIMIT);
+  const tooBig = files.some(file => file.size > REQUEST_LIMIT) || totalSize > REQUEST_LIMIT;
+  const hint = $('#storageHint');
+  hint.classList.toggle('hidden', !usesR2 && !tooBig);
+  hint.textContent = tooBig ? t('tooLarge') : usesR2 ? t('usesR2') : '';
   $('#fileInfo').classList.remove('hidden');
   $('#dropzone').classList.add('hidden');
-  $('#btnUpload').disabled = false;
+  $('#btnUpload').disabled = tooBig;
 }
 
 function clearFile() {
@@ -191,6 +250,8 @@ function clearFile() {
   $('#fileInput').value = '';
   $('#fileList').innerHTML = '';
   $('#fileList').classList.add('hidden');
+  $('#storageHint').classList.add('hidden');
+  $('#storageHint').textContent = '';
 }
 
 function resetUploadUI() {
@@ -200,8 +261,10 @@ function resetUploadUI() {
   $('#progressBar').style.width = '0%';
   $('#progressText').textContent = '0%';
   $('#btnUpload').disabled = true;
+  $('#clipText').value = '';
   $('#ttl').value = '86400';
   $('#oneTime').checked = false;
+  updateSendMode();
 }
 
 function generateQR(url) {
@@ -218,12 +281,114 @@ function generateQR(url) {
   });
 }
 
+function updateSendMode() {
+  const textMode = sendMode === 'text';
+  $('#panel-file')?.classList.toggle('hidden', textMode);
+  $('#panel-text')?.classList.toggle('hidden', !textMode);
+  $$('.mode-btn').forEach(btn => {
+    const active = btn.id === (textMode ? 'mode-text' : 'mode-file');
+    btn.classList.toggle('bg-white', active);
+    btn.classList.toggle('dark:bg-gray-700', active);
+    btn.classList.toggle('shadow-sm', active);
+    btn.classList.toggle('text-gray-500', !active);
+    btn.classList.toggle('dark:text-gray-400', !active);
+  });
+  const oneTimeLabel = $('#oneTimeText');
+  if (oneTimeLabel) oneTimeLabel.textContent = textMode ? t('oneTimeText') : t('oneTimeLabel');
+  if (!$('#btnUpload') || sending) return;
+  if (textMode) {
+    $('#btnUpload').disabled = !$('#clipText').value.trim();
+  } else if (!currentFiles.length || $('#fileInfo').classList.contains('hidden')) {
+    $('#btnUpload').disabled = true;
+  } else {
+    const totalSize = getTotalSize(currentFiles);
+    $('#btnUpload').disabled = currentFiles.some(file => file.size > REQUEST_LIMIT) || totalSize > REQUEST_LIMIT;
+  }
+}
+
+function showCodeResult(data, label) {
+  rememberPassword();
+  $('#resultCode').textContent = data.code;
+  const size = typeof data.size === 'number' ? data.size : 0;
+  const storedInR2 = Array.isArray(data.files) && data.files.some(file => file.storage === 'r2');
+  $('#resultMeta').textContent = `${label} · ${formatSize(size)}${storedInR2 ? ' · R2' : ''} · ${new Date(data.expiresAt * 1000).toLocaleString()}`;
+  $('#uploadResult').classList.remove('hidden');
+  generateQR(`${window.location.origin}/?code=${encodeURIComponent(data.code)}`);
+}
+
+function readErrorMessage(status, data) {
+  if (status === 401) return t('passwordWrong');
+  return data?.error || t('uploadFailed');
+}
+
+async function doClip() {
+  const text = $('#clipText').value;
+  if (!text.trim()) {
+    toast(t('textEmpty'));
+    return;
+  }
+  if (byteLength(text) > TEXT_LIMIT) {
+    toast(t('textTooLong'));
+    return;
+  }
+  if (!getAdminPassword()) {
+    toast(t('passwordRequired'));
+    return;
+  }
+  if (sending) return;
+  sending = true;
+  $('#btnUpload').disabled = true;
+  $('#uploadResult').classList.add('hidden');
+  try {
+    const res = await fetch('/api/clip', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: 'Bearer ' + getAdminPassword(),
+      },
+      body: JSON.stringify({
+        text,
+        ttl: $('#ttl').value,
+        oneTime: $('#oneTime').checked ? '1' : '0',
+      }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      if (res.status === 401) sessionStorage.removeItem('admin-token');
+      toast(readErrorMessage(res.status, data));
+      return;
+    }
+    showCodeResult(data, currentLang === 'zh' ? '文字' : 'Text');
+  } catch {
+    toast(t('uploadFailed'));
+  } finally {
+    sending = false;
+    updateSendMode();
+  }
+}
+
 function doUpload() {
+  if (sendMode === 'text') {
+    doClip();
+    return;
+  }
   if (!currentFiles.length) {
     toast(t('selectFileFirst'));
     return;
   }
+  const totalSize = getTotalSize(currentFiles);
+  if (currentFiles.some(file => file.size > REQUEST_LIMIT) || totalSize > REQUEST_LIMIT) {
+    toast(t('tooLarge'));
+    return;
+  }
+  if (!getAdminPassword()) {
+    toast(t('passwordRequired'));
+    return;
+  }
+  if (sending) return;
+  sending = true;
   $('#btnUpload').disabled = true;
+  $('#uploadResult').classList.add('hidden');
   $('#uploadProgress').classList.remove('hidden');
 
   const fd = new FormData();
@@ -233,6 +398,7 @@ function doUpload() {
 
   const xhr = new XMLHttpRequest();
   xhr.open('POST', '/api/upload');
+  xhr.setRequestHeader('Authorization', 'Bearer ' + getAdminPassword());
 
   xhr.upload.addEventListener('progress', (e) => {
     if (e.lengthComputable) {
@@ -244,35 +410,32 @@ function doUpload() {
 
   xhr.addEventListener('load', () => {
     $('#uploadProgress').classList.add('hidden');
+    sending = false;
     if (xhr.status >= 200 && xhr.status < 300) {
       try {
         const data = JSON.parse(xhr.responseText);
         const files = normalizeReceivedFiles(data);
-        const totalSize = typeof data.size === 'number' ? data.size : getTotalSize(files);
+        const uploadedSize = typeof data.size === 'number' ? data.size : getTotalSize(files);
         const label = files.length === 1 ? files[0].filename : formatFileCount(files.length);
-        $('#resultCode').textContent = data.code;
-        $('#resultMeta').textContent = `${label} · ${formatSize(totalSize)} · ${new Date(data.expiresAt * 1000).toLocaleString()}`;
-        $('#uploadResult').classList.remove('hidden');
-        const url = `${window.location.origin}/?code=${encodeURIComponent(data.code)}`;
-        generateQR(url);
+        showCodeResult({ ...data, size: uploadedSize, files }, label);
       } catch {
         toast(t('serverError'));
+        updateSendMode();
       }
     } else {
-      let msg = t('uploadFailed');
-      try {
-        const d = JSON.parse(xhr.responseText);
-        if (d.error) msg = d.error;
-      } catch {}
-      toast(msg);
-      $('#btnUpload').disabled = false;
+      let data = {};
+      try { data = JSON.parse(xhr.responseText); } catch {}
+      if (xhr.status === 401) sessionStorage.removeItem('admin-token');
+      toast(readErrorMessage(xhr.status, data));
+      updateSendMode();
     }
   });
 
   xhr.addEventListener('error', () => {
+    sending = false;
     $('#uploadProgress').classList.add('hidden');
     toast(t('uploadFailed'));
-    $('#btnUpload').disabled = false;
+    updateSendMode();
   });
 
   xhr.send(fd);
@@ -308,7 +471,7 @@ function renderReceiveFileList(code, files) {
     name.textContent = file.filename;
     const size = document.createElement('span');
     size.className = 'shrink-0 text-xs text-gray-500 dark:text-gray-400';
-    size.textContent = formatSize(file.size);
+    size.textContent = formatSize(file.size) + (file.storage === 'r2' ? ' · R2' : '');
     head.append(name, size);
 
     const actions = document.createElement('div');
@@ -335,13 +498,40 @@ function renderReceiveFileList(code, files) {
   });
 }
 
+async function renderReceiveText(code, data) {
+  const expiry = new Date(data.expiresAt * 1000).toLocaleString();
+  $('#recvFilename').textContent = t('modeText');
+  $('#recvMeta').textContent = `${formatSize(data.size || 0)} · ${expiry}${data.oneTime ? ' · ' + (currentLang === 'zh' ? '一次性' : 'One-time') : ''}`;
+  $('#recvWarn').textContent = t('oneTimeText');
+  $('#recvWarn').classList.toggle('hidden', !data.oneTime);
+  $('#recvFileList').classList.add('hidden');
+  $('#recvActions').classList.add('hidden');
+  $('#receiveText').classList.remove('hidden');
+  $('#recvText').value = t('loading');
+  $('#receiveInfo').classList.remove('hidden');
+
+  const res = await fetch(`/api/download/${encodeURIComponent(code)}`);
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    $('#receiveInfo').classList.add('hidden');
+    toast(body.error || t('fileNotFound'));
+    return;
+  }
+  $('#recvText').value = await res.text();
+}
+
 function renderReceiveInfo(code, data) {
+  if (data.kind === 'text') return renderReceiveText(code, data);
+  $('#receiveText').classList.add('hidden');
+  $('#recvText').value = '';
+  $('#recvWarn').textContent = t('oneTimeWarn');
   const files = normalizeReceivedFiles(data);
   const totalSize = typeof data.size === 'number' ? data.size : getTotalSize(files);
   const isMulti = files.length > 1;
   const expiry = new Date(data.expiresAt * 1000).toLocaleString();
+  const storageNote = files.some(file => file.storage === 'r2') ? ' · R2' : '';
   $('#recvFilename').textContent = isMulti ? formatFileCount(files.length) : files[0].filename;
-  $('#recvMeta').textContent = `${formatSize(totalSize)} · ${expiry}${data.oneTime ? ' · ' + (currentLang === 'zh' ? '一次性' : 'One-time') : ''}`;
+  $('#recvMeta').textContent = `${formatSize(totalSize)}${storageNote} · ${expiry}${data.oneTime ? ' · ' + (currentLang === 'zh' ? '一次性' : 'One-time') : ''}`;
   $('#recvWarn').classList.toggle('hidden', !data.oneTime);
   $('#recvActions').classList.toggle('hidden', isMulti);
   $('#recvFileList').classList.toggle('hidden', !isMulti);
@@ -363,28 +553,39 @@ function renderReceiveInfo(code, data) {
   $('#receiveInfo').classList.remove('hidden');
 }
 
-async function fetchFileInfo() {
+async function fetchFileInfo(expectKind) {
   const code = getCodeFromInputs();
   if (!/^\d{6}$/.test(code)) {
     toast(t('fillCode'));
     return;
   }
   $('#btnFetch').disabled = true;
+  $('#btnPaste').disabled = true;
   try {
     const res = await fetch(`/api/info/${code}`);
+    const data = await res.json().catch(() => ({}));
     if (!res.ok) {
-      const d = await res.json().catch(() => ({}));
-      toast(d.error || t('fileNotFound'));
+      toast(data.error || t('fileNotFound'));
       $('#receiveInfo').classList.add('hidden');
       return;
     }
-    const data = await res.json();
-    // Show preview button for supported types
-    renderReceiveInfo(code, data);
+    const kind = data.kind === 'text' ? 'text' : 'file';
+    if (expectKind === 'file' && kind === 'text') {
+      toast(t('usePaste'));
+      $('#receiveInfo').classList.add('hidden');
+      return;
+    }
+    if (expectKind === 'text' && kind === 'file') {
+      toast(t('useCheck'));
+      $('#receiveInfo').classList.add('hidden');
+      return;
+    }
+    await renderReceiveInfo(code, data);
   } catch {
     toast(t('serverError'));
   } finally {
     $('#btnFetch').disabled = false;
+    $('#btnPaste').disabled = false;
   }
 }
 
@@ -408,9 +609,15 @@ async function fetchFileInfo() {
   // Tabs
   const hash = new URLSearchParams(window.location.search);
   const codeFromUrl = hash.get('code');
+  const savedPassword = sessionStorage.getItem('admin-token');
+  if (savedPassword) $('#adminPassword').value = savedPassword;
+
   if (codeFromUrl) {
     switchTab('receive');
-    setTimeout(() => fillCodeInputs(codeFromUrl), 0);
+    setTimeout(() => {
+      fillCodeInputs(codeFromUrl);
+      if (/^\d{6}$/.test(codeFromUrl)) fetchFileInfo();
+    }, 0);
   } else {
     switchTab('send');
   }
@@ -427,6 +634,30 @@ async function fetchFileInfo() {
   $('#removeFile').addEventListener('click', clearFile);
   $('#btnUpload').addEventListener('click', doUpload);
   $('#btnNewUpload').addEventListener('click', resetUploadUI);
+  $('#mode-file').addEventListener('click', () => { sendMode = 'file'; updateSendMode(); });
+  $('#mode-text').addEventListener('click', () => { sendMode = 'text'; updateSendMode(); });
+  $('#clipText').addEventListener('input', updateSendMode);
+  $('#clipText').addEventListener('paste', () => {
+    setTimeout(() => {
+      updateSendMode();
+      if ($('#clipText').value.trim()) doClip();
+    }, 0);
+  });
+  $('#btnCopyText').addEventListener('click', async () => {
+    const text = $('#recvText').value;
+    if (!text || text === t('loading')) return;
+    try {
+      await navigator.clipboard.writeText(text);
+      toast(t('copied'));
+    } catch {
+      $('#recvText').removeAttribute('readonly');
+      $('#recvText').focus();
+      $('#recvText').select();
+      document.execCommand('copy');
+      $('#recvText').setAttribute('readonly', '');
+      toast(t('copied'));
+    }
+  });
 
   $('#btnCopy').addEventListener('click', async () => {
     const code = $('#resultCode').textContent;
@@ -478,7 +709,8 @@ async function fetchFileInfo() {
     });
   });
 
-  $('#btnFetch').addEventListener('click', fetchFileInfo);
+  $('#btnFetch').addEventListener('click', () => fetchFileInfo('file'));
+  $('#btnPaste').addEventListener('click', () => fetchFileInfo('text'));
 
   // Preview
   $('#btnPreview').addEventListener('click', () => {
