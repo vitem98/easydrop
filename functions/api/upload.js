@@ -17,9 +17,6 @@ import {
 export async function onRequestPost(context) {
   const { request, env } = context;
 
-  const denied = requireAdmin(request, env);
-  if (denied) return denied;
-
   const ct = request.headers.get("content-type") || "";
   if (!ct.includes("multipart/form-data")) {
     return err("请使用文件上传");
@@ -56,6 +53,11 @@ export async function onRequestPost(context) {
   const totalSize = files.reduce((sum, file) => sum + file.size, 0);
   if (totalSize > REQUEST_MAX_BYTES) {
     return err("单次上传不能超过 100 MB", 413);
+  }
+
+  if (files.some((file) => file.size > KV_MAX_BYTES)) {
+    const denied = requireAdmin(request, env);
+    if (denied) return denied;
   }
 
   const ttlStr = form.get("ttl") || "86400";

@@ -4,7 +4,6 @@ import {
   nowSec,
   json,
   err,
-  requireAdmin,
   generateUniqueCode,
   byteLength,
   sweepExpiredR2,
@@ -12,9 +11,6 @@ import {
 
 export async function onRequestPost(context) {
   const { request, env } = context;
-
-  const denied = requireAdmin(request, env);
-  if (denied) return denied;
 
   let body;
   try {

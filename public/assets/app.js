@@ -7,15 +7,18 @@ const i18n = {
     modeFile: "File",
     modeText: "Text",
     textPlaceholder: "Paste text here to get a 6-digit code",
-    textHint: "On the other computer, enter the code and click Paste text.",
+    textHint: "Pasting text creates a 6-digit code. Enter that code on the other computer.",
     adminPassword: "Admin password",
-    adminPasswordPh: "Required to upload files or send text",
-    passwordRequired: "Enter the admin password first",
+    passwordRequired: "Enter the admin password",
+    r2PasswordTitle: "This file is over 25 MB and will be stored in R2",
+    r2PasswordHint: "Enter the admin password to continue",
+    continueUpload: "Continue upload",
+    cancel: "Cancel",
     passwordWrong: "Wrong admin password",
     textEmpty: "Paste some text first",
     textTooLong: "Text is larger than 1 MB",
     tooLarge: "A file or the total upload is larger than 100 MB",
-    usesR2: "Files over 25 MB will be stored in R2",
+    usesR2: "Over 25 MB. An admin password is required when you get the code",
     pasteText: "Paste text",
     copyText: "Copy text",
     usePaste: "This code is text. Click Paste text.",
@@ -51,15 +54,18 @@ const i18n = {
     modeFile: "文件",
     modeText: "文字",
     textPlaceholder: "在这里粘贴文字，会生成 6 位验证码",
-    textHint: "另一台电脑打开本页，输入验证码后点「粘贴文字」即可取回。",
+    textHint: "贴上文字后会生成 6 位验证码，另一台电脑输入验证码即可取回。",
     adminPassword: "管理员密码",
-    adminPasswordPh: "上传文件和发送文字时需要",
-    passwordRequired: "请先填写管理员密码",
+    passwordRequired: "请输入管理员密码",
+    r2PasswordTitle: "这个文件超过 25 MB，将存到 R2",
+    r2PasswordHint: "继续上传需要管理员密码",
+    continueUpload: "继续上传",
+    cancel: "取消",
     passwordWrong: "管理员密码错误",
     textEmpty: "请先粘贴文字",
     textTooLong: "文字超过 1 MB",
     tooLarge: "单个文件或本次上传超过 100 MB",
-    usesR2: "超过 25 MB 的文件会存到 R2",
+    usesR2: "超过 25 MB，生成验证码时需要管理员密码",
     pasteText: "粘贴文字",
     copyText: "复制文字",
     usePaste: "这是一段文字，请点「粘贴文字」",
@@ -144,13 +150,22 @@ function toast(msg) {
   setTimeout(() => el.classList.add('opacity-0'), 2000);
 }
 
-function getAdminPassword() {
-  return $('#adminPassword')?.value.trim() || "";
+function needsR2Upload(files) {
+  return files.some(file => file.size > KV_LIMIT);
 }
 
-function rememberPassword() {
-  const password = getAdminPassword();
-  if (password) sessionStorage.setItem('admin-token', password);
+function openR2Password(message) {
+  const error = $('#r2PasswordErr');
+  error.textContent = message || '';
+  error.classList.toggle('hidden', !message);
+  $('#r2Password').value = '';
+  $('#r2PasswordModal').classList.remove('hidden');
+  setTimeout(() => $('#r2Password').focus(), 0);
+}
+
+function closeR2Password() {
+  $('#r2PasswordModal').classList.add('hidden');
+  $('#r2PasswordErr').classList.add('hidden');
 }
 
 function byteLength(text) {
@@ -307,7 +322,6 @@ function updateSendMode() {
 }
 
 function showCodeResult(data, label) {
-  rememberPassword();
   $('#resultCode').textContent = data.code;
   const size = typeof data.size === 'number' ? data.size : 0;
   const storedInR2 = Array.isArray(data.files) && data.files.some(file => file.storage === 'r2');
@@ -331,10 +345,6 @@ async function doClip() {
     toast(t('textTooLong'));
     return;
   }
-  if (!getAdminPassword()) {
-    toast(t('passwordRequired'));
-    return;
-  }
   if (sending) return;
   sending = true;
   $('#btnUpload').disabled = true;
@@ -342,10 +352,7 @@ async function doClip() {
   try {
     const res = await fetch('/api/clip', {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: 'Bearer ' + getAdminPassword(),
-      },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         text,
         ttl: $('#ttl').value,
@@ -354,7 +361,6 @@ async function doClip() {
     });
     const data = await res.json().catch(() => ({}));
     if (!res.ok) {
-      if (res.status === 401) sessionStorage.removeItem('admin-token');
       toast(readErrorMessage(res.status, data));
       return;
     }
@@ -381,10 +387,14 @@ function doUpload() {
     toast(t('tooLarge'));
     return;
   }
-  if (!getAdminPassword()) {
-    toast(t('passwordRequired'));
+  if (needsR2Upload(currentFiles)) {
+    openR2Password();
     return;
   }
+  startFileUpload('');
+}
+
+function startFileUpload(password) {
   if (sending) return;
   sending = true;
   $('#btnUpload').disabled = true;
@@ -398,7 +408,7 @@ function doUpload() {
 
   const xhr = new XMLHttpRequest();
   xhr.open('POST', '/api/upload');
-  xhr.setRequestHeader('Authorization', 'Bearer ' + getAdminPassword());
+  if (password) xhr.setRequestHeader('Authorization', 'Bearer ' + password);
 
   xhr.upload.addEventListener('progress', (e) => {
     if (e.lengthComputable) {
@@ -425,7 +435,11 @@ function doUpload() {
     } else {
       let data = {};
       try { data = JSON.parse(xhr.responseText); } catch {}
-      if (xhr.status === 401) sessionStorage.removeItem('admin-token');
+      if (xhr.status === 401) {
+        openR2Password(t('passwordWrong'));
+        updateSendMode();
+        return;
+      }
       toast(readErrorMessage(xhr.status, data));
       updateSendMode();
     }
@@ -609,8 +623,6 @@ async function fetchFileInfo(expectKind) {
   // Tabs
   const hash = new URLSearchParams(window.location.search);
   const codeFromUrl = hash.get('code');
-  const savedPassword = sessionStorage.getItem('admin-token');
-  if (savedPassword) $('#adminPassword').value = savedPassword;
 
   if (codeFromUrl) {
     switchTab('receive');
@@ -633,6 +645,20 @@ async function fetchFileInfo(expectKind) {
   });
   $('#removeFile').addEventListener('click', clearFile);
   $('#btnUpload').addEventListener('click', doUpload);
+  $('#r2PasswordCancel').addEventListener('click', closeR2Password);
+  $('#r2PasswordBackdrop').addEventListener('click', closeR2Password);
+  $('#r2PasswordConfirm').addEventListener('click', () => {
+    const password = $('#r2Password').value.trim();
+    if (!password) {
+      openR2Password(t('passwordRequired'));
+      return;
+    }
+    closeR2Password();
+    startFileUpload(password);
+  });
+  $('#r2Password').addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') $('#r2PasswordConfirm').click();
+  });
   $('#btnNewUpload').addEventListener('click', resetUploadUI);
   $('#mode-file').addEventListener('click', () => { sendMode = 'file'; updateSendMode(); });
   $('#mode-text').addEventListener('click', () => { sendMode = 'text'; updateSendMode(); });
@@ -720,7 +746,10 @@ async function fetchFileInfo(expectKind) {
   $('#previewClose').addEventListener('click', closePreview);
   $('#previewBackdrop').addEventListener('click', closePreview);
   document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape') closePreview();
+    if (e.key === 'Escape') {
+      closeR2Password();
+      closePreview();
+    }
   });
 })();
 

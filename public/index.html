@@ -76,12 +76,7 @@
 
       <div id="panel-text" class="hidden space-y-2">
         <textarea id="clipText" rows="8" class="w-full rounded-2xl border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 px-4 py-3 text-sm leading-6 focus:outline-none focus:ring-2 focus:ring-brand-500" data-t-placeholder="textPlaceholder" placeholder="在这里粘贴文字，会生成 6 位验证码"></textarea>
-        <p class="text-xs text-gray-400 dark:text-gray-500" data-t="textHint">另一台电脑打开本页，输入验证码后点「粘贴文字」即可取回。</p>
-      </div>
-
-      <div>
-        <label class="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1.5" data-t="adminPassword">管理员密码</label>
-        <input id="adminPassword" type="password" autocomplete="current-password" class="w-full rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500" data-t-placeholder="adminPasswordPh" placeholder="上传文件和发送文字时需要" />
+        <p class="text-xs text-gray-400 dark:text-gray-500" data-t="textHint">贴上文字后会生成 6 位验证码，另一台电脑输入验证码即可取回。</p>
       </div>
 
       <div class="grid grid-cols-2 gap-4">
@@ -186,6 +181,22 @@
         </div>
       </div>
       <div id="previewContent" class="flex-1 overflow-auto flex items-center justify-center p-4">
+      </div>
+    </div>
+  </div>
+
+  <div id="r2PasswordModal" class="fixed inset-0 z-40 hidden">
+    <div class="absolute inset-0 bg-black/70 backdrop-blur-sm" id="r2PasswordBackdrop"></div>
+    <div class="relative z-10 flex items-center justify-center min-h-full p-4">
+      <div class="w-full max-w-sm bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 p-6 space-y-4">
+        <p class="text-sm font-medium" data-t="r2PasswordTitle">这个文件超过 25 MB，将存到 R2</p>
+        <p class="text-xs text-gray-500 dark:text-gray-400" data-t="r2PasswordHint">继续上传需要管理员密码</p>
+        <input id="r2Password" type="password" autocomplete="current-password" class="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-900 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500" data-t-placeholder="adminPassword" placeholder="管理员密码" />
+        <p id="r2PasswordErr" class="hidden text-xs text-red-500"></p>
+        <div class="flex gap-2">
+          <button id="r2PasswordCancel" type="button" class="flex-1 py-2.5 rounded-xl bg-gray-100 dark:bg-gray-700 text-sm font-medium" data-t="cancel">取消</button>
+          <button id="r2PasswordConfirm" type="button" class="flex-1 py-2.5 rounded-xl bg-brand-600 hover:bg-brand-700 text-white text-sm font-medium" data-t="continueUpload">继续上传</button>
+        </div>
       </div>
     </div>
   </div>
