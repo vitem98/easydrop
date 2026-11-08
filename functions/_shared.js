@@ -5,6 +5,7 @@ export const MAX_FILE_COUNT = 10;
 export const TTL_OPTIONS = { "3600": 3600, "86400": 86400, "604800": 604800 };
 export const CODE_RETRIES = 10;
 const R2_INDEX_KEY = "r2:index";
+const OWNED_R2_KEY = /^file:\d{6}:\d+$/;
 
 export function nowSec() {
   return Math.floor(Date.now() / 1000);
@@ -117,21 +118,28 @@ export async function forgetR2Keys(env, keys) {
   await writeR2Index(env, list.filter((item) => !drop.has(item.key)));
 }
 
+function ownedR2Key(key) {
+  return OWNED_R2_KEY.test(key || "");
+}
+
 export async function sweepExpiredR2(env) {
   if (!env.BUCKET) return;
   const now = nowSec();
   const list = await readR2Index(env);
-  const expired = list.filter((item) => !item || item.expiresAt <= now);
-  if (!expired.length) return;
-  await Promise.all(expired.map((item) => env.BUCKET.delete(item.key).catch(() => {})));
+  const expired = list.filter((item) => item && ownedR2Key(item.key) && item.expiresAt <= now);
+  if (expired.length) {
+    await Promise.all(expired.map((item) => env.BUCKET.delete(item.key).catch(() => {})));
+  }
   const drop = new Set(expired.map((item) => item.key));
-  await writeR2Index(env, list.filter((item) => item && !drop.has(item.key)));
+  const kept = list.filter((item) => item && ownedR2Key(item.key) && !drop.has(item.key));
+  if (kept.length !== list.length) await writeR2Index(env, kept);
 }
 
 export async function deleteStoredItems(env, items) {
   const r2Keys = [];
   await Promise.all(items.map(async (item) => {
     if (item.storage === "r2") {
+      if (!ownedR2Key(item.key)) return;
       r2Keys.push(item.key);
       if (env.BUCKET) await env.BUCKET.delete(item.key).catch(() => {});
     } else {

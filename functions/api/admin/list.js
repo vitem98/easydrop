@@ -1,4 +1,4 @@
-import { json, requireAdmin, storageSummary, sweepExpiredR2 } from "../../_shared.js";
+import { json, requireAdmin, storageSummary } from "../../_shared.js";
 
 const KV_STORAGE_LIMIT = 1024 * 1024 * 1024;
 const R2_STORAGE_LIMIT = 10 * 1024 * 1024 * 1024;
@@ -44,20 +44,41 @@ function payloadUsage(meta) {
   }, { kv: 0, r2: 0, kvCount: 0, r2Count: 0 });
 }
 
-async function measureR2(env) {
-  if (!env.BUCKET) return { used: 0, count: 0, configured: false };
+const R2_USAGE_BUCKETS = [
+  ["easydrop", "BUCKET"],
+  ["ak-ar-groups", "R2_AK_AR_GROUPS"],
+  ["ak-ar-submissions", "R2_AK_AR_SUBMISSIONS"],
+];
+
+async function measureBucket(bucket) {
   let used = 0;
   let count = 0;
   let cursor;
   do {
-    const listed = await env.BUCKET.list({ cursor, limit: 1000 });
+    const listed = await bucket.list({ cursor, limit: 1000 });
     for (const object of listed.objects || []) {
       used += object.size || 0;
       count += 1;
     }
     cursor = listed.truncated ? listed.cursor : undefined;
   } while (cursor);
-  return { used, count, configured: true };
+  return { used, count };
+}
+
+async function measureR2(env) {
+  const buckets = [];
+  for (const [name, binding] of R2_USAGE_BUCKETS) {
+    const bucket = env[binding];
+    if (!bucket || typeof bucket.list !== "function") continue;
+    const measured = await measureBucket(bucket);
+    buckets.push({ name, used: measured.used, count: measured.count });
+  }
+  return {
+    used: buckets.reduce((sum, bucket) => sum + bucket.used, 0),
+    count: buckets.reduce((sum, bucket) => sum + bucket.count, 0),
+    configured: buckets.length > 0,
+    buckets,
+  };
 }
 
 export async function onRequestGet(context) {
@@ -65,8 +86,6 @@ export async function onRequestGet(context) {
 
   const denied = requireAdmin(request, env);
   if (denied) return denied;
-
-  await sweepExpiredR2(env);
 
   // List all meta: keys from KV
   const files = [];
@@ -122,7 +141,13 @@ export async function onRequestGet(context) {
     totalSize,
     storage: {
       kv: { used: kvUsed, limit: KV_STORAGE_LIMIT, count: kvCount },
-      r2: { used: r2.used, limit: R2_STORAGE_LIMIT, count: r2.count, configured: r2.configured },
+      r2: {
+        used: r2.used,
+        limit: R2_STORAGE_LIMIT,
+        count: r2.count,
+        configured: r2.configured,
+        buckets: r2.buckets,
+      },
     },
     files: files.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0)),
   });

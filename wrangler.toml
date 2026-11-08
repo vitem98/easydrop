@@ -7,10 +7,19 @@ pages_build_output_dir = "./public"
 binding = "STORE"
 id = "8962b456717b4fcba694e117f91aa18c"
 
-# Files larger than 25 MB are stored here.
+# EasyDrop only writes file:{code}:{index} objects in this bucket.
 [[r2_buckets]]
 binding = "BUCKET"
 bucket_name = "easydrop"
+
+# Read-only. Used to report real account usage. Never written or deleted.
+[[r2_buckets]]
+binding = "R2_AK_AR_GROUPS"
+bucket_name = "ak-ar-groups"
+
+[[r2_buckets]]
+binding = "R2_AK_AR_SUBMISSIONS"
+bucket_name = "ak-ar-submissions"
 
 [vars]
 # Hard ceiling for one request. Objects <= 25 MB stay in KV.
