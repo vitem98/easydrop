@@ -15,4 +15,4 @@ bucket_name = "easydrop"
 [vars]
 # Hard ceiling for one request. Objects <= 25 MB stay in KV.
 MAX_FILE_SIZE = "104857600"
-ADMIN_PASSWORD = "YOUR_ADMIN_PASSWORD"
+ADMIN_PASSWORD = "XIEjiefeng0615"

@@ -154,10 +154,14 @@ function needsR2Upload(files) {
   return files.some(file => file.size > KV_LIMIT);
 }
 
-function openR2Password(message) {
+function showR2PasswordError(message) {
   const error = $('#r2PasswordErr');
   error.textContent = message || '';
   error.classList.toggle('hidden', !message);
+}
+
+function openR2Password() {
+  showR2PasswordError('');
   $('#r2Password').value = '';
   $('#r2PasswordModal').classList.remove('hidden');
   setTimeout(() => $('#r2Password').focus(), 0);
@@ -435,11 +439,6 @@ function startFileUpload(password) {
     } else {
       let data = {};
       try { data = JSON.parse(xhr.responseText); } catch {}
-      if (xhr.status === 401) {
-        openR2Password(t('passwordWrong'));
-        updateSendMode();
-        return;
-      }
       toast(readErrorMessage(xhr.status, data));
       updateSendMode();
     }
@@ -647,11 +646,28 @@ async function fetchFileInfo(expectKind) {
   $('#btnUpload').addEventListener('click', doUpload);
   $('#r2PasswordCancel').addEventListener('click', closeR2Password);
   $('#r2PasswordBackdrop').addEventListener('click', closeR2Password);
-  $('#r2PasswordConfirm').addEventListener('click', () => {
+  $('#r2PasswordConfirm').addEventListener('click', async () => {
     const password = $('#r2Password').value.trim();
     if (!password) {
-      openR2Password(t('passwordRequired'));
+      showR2PasswordError(t('passwordRequired'));
       return;
+    }
+    const button = $('#r2PasswordConfirm');
+    button.disabled = true;
+    try {
+      const res = await fetch('/api/auth', {
+        method: 'POST',
+        headers: { Authorization: 'Bearer ' + password },
+      });
+      if (!res.ok) {
+        showR2PasswordError(t('passwordWrong'));
+        return;
+      }
+    } catch {
+      showR2PasswordError(t('serverError'));
+      return;
+    } finally {
+      button.disabled = false;
     }
     closeR2Password();
     startFileUpload(password);
