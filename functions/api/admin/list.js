@@ -1,4 +1,4 @@
-import { json, requireAdmin, storageSummary } from "../../_shared.js";
+import { json, requireAdmin, storageSummary, isOwnedR2Key } from "../../_shared.js";
 
 const KV_STORAGE_LIMIT = 1024 * 1024 * 1024;
 const R2_STORAGE_LIMIT = 10 * 1024 * 1024 * 1024;
@@ -50,34 +50,41 @@ const R2_USAGE_BUCKETS = [
   ["ak-ar-submissions", "R2_AK_AR_SUBMISSIONS"],
 ];
 
-async function measureBucket(bucket) {
-  let used = 0;
-  let count = 0;
-  let cursor;
-  do {
-    const listed = await bucket.list({ cursor, limit: 1000 });
-    for (const object of listed.objects || []) {
-      used += object.size || 0;
-      count += 1;
-    }
-    cursor = listed.truncated ? listed.cursor : undefined;
-  } while (cursor);
-  return { used, count };
-}
-
 async function measureR2(env) {
-  const buckets = [];
+  let easydropUsed = 0;
+  let easydropCount = 0;
+  let otherUsed = 0;
+  let otherCount = 0;
+  let configured = false;
+
   for (const [name, binding] of R2_USAGE_BUCKETS) {
     const bucket = env[binding];
     if (!bucket || typeof bucket.list !== "function") continue;
-    const measured = await measureBucket(bucket);
-    buckets.push({ name, used: measured.used, count: measured.count });
+    configured = true;
+    const splitOwned = name === "easydrop";
+    let cursor;
+    do {
+      const listed = await bucket.list({ cursor, limit: 1000 });
+      for (const object of listed.objects || []) {
+        const size = object.size || 0;
+        if (splitOwned && isOwnedR2Key(object.key)) {
+          easydropUsed += size;
+          easydropCount += 1;
+        } else {
+          otherUsed += size;
+          otherCount += 1;
+        }
+      }
+      cursor = listed.truncated ? listed.cursor : undefined;
+    } while (cursor);
   }
+
   return {
-    used: buckets.reduce((sum, bucket) => sum + bucket.used, 0),
-    count: buckets.reduce((sum, bucket) => sum + bucket.count, 0),
-    configured: buckets.length > 0,
-    buckets,
+    used: easydropUsed + otherUsed,
+    count: easydropCount + otherCount,
+    configured,
+    easydrop: { used: easydropUsed, count: easydropCount },
+    other: { used: otherUsed, count: otherCount },
   };
 }
 
@@ -146,7 +153,8 @@ export async function onRequestGet(context) {
         limit: R2_STORAGE_LIMIT,
         count: r2.count,
         configured: r2.configured,
-        buckets: r2.buckets,
+        easydrop: r2.easydrop,
+        other: r2.other,
       },
     },
     files: files.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0)),
