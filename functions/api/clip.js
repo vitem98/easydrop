@@ -7,6 +7,8 @@ import {
   generateUniqueCode,
   byteLength,
   sweepExpiredR2,
+  clientInfo,
+  logEvent,
 } from "../_shared.js";
 
 export async function onRequestPost(context) {
@@ -61,6 +63,7 @@ export async function onRequestPost(context) {
     expiresAt,
     oneTime,
     createdAt: nowSec(),
+    uploader: clientInfo(request),
   };
 
   try {
@@ -69,6 +72,14 @@ export async function onRequestPost(context) {
     await env.STORE.delete(textKey).catch(() => {});
     return err("验证码登记失败", 500);
   }
+
+  await logEvent(env, request, {
+    action: "clip",
+    kind: "text",
+    code,
+    name: meta.filename,
+    size,
+  });
 
   return json({
     code,

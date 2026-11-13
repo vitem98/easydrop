@@ -14,7 +14,8 @@
 - **Receive** — enter the 6-digit code, preview file info, click download
 - **Dark mode** — follows system preference, manual toggle
 - **Bilingual UI** — English / 中文, auto-detected, switchable
-- **Admin panel** — password-protected dashboard at `/admin.html` to monitor and manage files
+- **Admin panel** — password-protected dashboard at `/admin.html` to monitor and manage files, with a 30-day usage log (who sent or received what: IP, location, device)
+- **Large files** — files over 25 MB go to R2 (up to 100 MB per upload), no password needed
 - **Auto-expire** — KV TTL handles expiration automatically, no cron needed
 
 ---
@@ -191,7 +192,8 @@ npx wrangler pages deploy public
 - 一次性下载开关
 - 6 位验证码 + QR 码
 - 暗色模式、中英双语
-- 密码保护的管理面板（`/admin.html`）
+- 密码保护的管理面板（`/admin.html`），可查看近 30 天的使用情况（谁发送、谁接收：IP、位置、设备）
+- 超过 25 MB 的文件存到 R2（单次最大 100 MB），不需要密码
 - 文件自动过期，无需定时清理
 
 详细说明见上方英文部分。

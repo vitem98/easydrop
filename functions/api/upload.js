@@ -7,11 +7,12 @@ import {
   sanitizeFilename,
   json,
   err,
-  requireAdmin,
   generateUniqueCode,
   deleteStoredItems,
   rememberR2Objects,
   sweepExpiredR2,
+  clientInfo,
+  logEvent,
 } from "../_shared.js";
 
 export async function onRequestPost(context) {
@@ -53,11 +54,6 @@ export async function onRequestPost(context) {
   const totalSize = files.reduce((sum, file) => sum + file.size, 0);
   if (totalSize > REQUEST_MAX_BYTES) {
     return err("单次上传不能超过 100 MB", 413);
-  }
-
-  if (files.some((file) => file.size > KV_MAX_BYTES)) {
-    const denied = requireAdmin(request, env);
-    if (denied) return denied;
   }
 
   const ttlStr = form.get("ttl") || "86400";
@@ -122,6 +118,7 @@ export async function onRequestPost(context) {
     expiresAt,
     oneTime,
     createdAt: nowSec(),
+    uploader: clientInfo(request),
   };
 
   try {
@@ -130,6 +127,15 @@ export async function onRequestPost(context) {
     await deleteStoredItems(env, stored);
     return err("验证码登记失败", 500);
   }
+
+  await logEvent(env, request, {
+    action: "upload",
+    kind: "file",
+    code,
+    name: meta.filename,
+    size: totalSize,
+    count: files.length,
+  });
 
   return json({
     code,

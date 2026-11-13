@@ -1,4 +1,12 @@
-import { json, requireAdmin, storageSummary, isOwnedR2Key } from "../../_shared.js";
+import {
+  json,
+  requireAdmin,
+  storageSummary,
+  isOwnedR2Key,
+  nowSec,
+  readEvents,
+  LOG_DAYS,
+} from "../../_shared.js";
 
 const KV_STORAGE_LIMIT = 1024 * 1024 * 1024;
 const R2_STORAGE_LIMIT = 10 * 1024 * 1024 * 1024;
@@ -88,6 +96,95 @@ async function measureR2(env) {
   };
 }
 
+const RECENT_EVENT_LIMIT = 200;
+
+function pickClient(source) {
+  return {
+    ip: source.ip || "",
+    country: source.country || "",
+    region: source.region || "",
+    city: source.city || "",
+    isp: source.isp || "",
+    device: source.device || "",
+  };
+}
+
+// Events arrive newest first. People are told apart by IP address.
+function buildUsage(events, truncated) {
+  const dayAgo = nowSec() - 86400;
+  const users = new Map();
+  const todayIps = new Set();
+  const summary = {
+    users: 0,
+    uploads: 0,
+    downloads: 0,
+    uploadBytes: 0,
+    downloadBytes: 0,
+    today: { users: 0, uploads: 0, downloads: 0 },
+  };
+
+  for (const event of events) {
+    const ip = event.ip || "";
+    const isDownload = event.action === "download";
+    const size = Number(event.size) || 0;
+    const recent = event.t >= dayAgo;
+
+    let user = users.get(ip);
+    if (!user) {
+      user = {
+        ...pickClient(event),
+        devices: [],
+        uploads: 0,
+        downloads: 0,
+        uploadBytes: 0,
+        downloadBytes: 0,
+        lastSeen: event.t,
+        firstSeen: event.t,
+      };
+      users.set(ip, user);
+    }
+    user.firstSeen = Math.min(user.firstSeen, event.t);
+    if (event.device && !user.devices.includes(event.device) && user.devices.length < 5) {
+      user.devices.push(event.device);
+    }
+
+    if (isDownload) {
+      user.downloads += 1;
+      user.downloadBytes += size;
+      summary.downloads += 1;
+      summary.downloadBytes += size;
+      if (recent) summary.today.downloads += 1;
+    } else {
+      user.uploads += 1;
+      user.uploadBytes += size;
+      summary.uploads += 1;
+      summary.uploadBytes += size;
+      if (recent) summary.today.uploads += 1;
+    }
+    if (recent) todayIps.add(ip);
+  }
+
+  summary.users = users.size;
+  summary.today.users = todayIps.size;
+
+  return {
+    days: LOG_DAYS,
+    truncated,
+    summary,
+    users: [...users.values()].sort((a, b) => b.lastSeen - a.lastSeen),
+    events: events.slice(0, RECENT_EVENT_LIMIT),
+  };
+}
+
+function countDownloads(events, code, createdAt) {
+  const since = Number(createdAt) || 0;
+  let count = 0;
+  for (const event of events) {
+    if (event.action === "download" && event.code === code && event.t >= since) count += 1;
+  }
+  return count;
+}
+
 export async function onRequestGet(context) {
   const { request, env } = context;
 
@@ -126,6 +223,7 @@ export async function onRequestGet(context) {
             createdAt: meta.createdAt,
             kind: meta.kind === "text" ? "text" : "file",
             storage: storageSummary(meta),
+            uploader: meta.uploader ? pickClient(meta.uploader) : null,
           });
           totalSize += size || 0;
           totalFileCount += meta.kind === "text" ? 1 : fileMetas.length;
@@ -142,6 +240,16 @@ export async function onRequestGet(context) {
 
   const r2 = await measureR2(env);
 
+  let logged = { events: [], truncated: false };
+  try {
+    logged = await readEvents(env);
+  } catch {
+    // The usage log is optional. The file list still loads without it.
+  }
+  for (const file of files) {
+    file.downloads = countDownloads(logged.events, file.code, file.createdAt);
+  }
+
   return json({
     count: totalFileCount,
     transferCount: files.length,
@@ -157,6 +265,7 @@ export async function onRequestGet(context) {
         other: r2.other,
       },
     },
+    usage: buildUsage(logged.events, logged.truncated),
     files: files.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0)),
   });
 }

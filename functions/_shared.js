@@ -204,3 +204,94 @@ export function streamAndThen(body, task) {
     },
   });
 }
+
+// --- Usage log ---
+// One KV key per event. The details live in the key's metadata, so the admin
+// page reads a whole page of events with a single list() call.
+const LOG_PREFIX = "log:";
+export const LOG_DAYS = 30;
+const LOG_TTL = LOG_DAYS * 86400;
+const LOG_KEY_BASE = 1e13;
+
+function clip(value, max) {
+  return String(value == null ? "" : value).slice(0, max);
+}
+
+export function describeDevice(ua) {
+  if (!ua) return "";
+  let os = "";
+  if (/iPhone|iPod/.test(ua)) os = "iPhone";
+  else if (/iPad/.test(ua)) os = "iPad";
+  else if (/HarmonyOS|OpenHarmony/.test(ua)) os = "HarmonyOS";
+  else if (/Android/.test(ua)) os = "Android";
+  else if (/Windows/.test(ua)) os = "Windows";
+  else if (/Mac OS X|Macintosh/.test(ua)) os = "macOS";
+  else if (/Linux/.test(ua)) os = "Linux";
+
+  let browser = "";
+  if (/MicroMessenger/.test(ua)) browser = "微信";
+  else if (/DingTalk/.test(ua)) browser = "钉钉";
+  else if (/QQBrowser|MQQBrowser/.test(ua)) browser = "QQ浏览器";
+  else if (/Edg(e|A|iOS)?\//.test(ua)) browser = "Edge";
+  else if (/Firefox|FxiOS/.test(ua)) browser = "Firefox";
+  else if (/Chrome|CriOS/.test(ua)) browser = "Chrome";
+  else if (/Safari/.test(ua)) browser = "Safari";
+  else if (/curl|Wget|python|Go-http|okhttp/i.test(ua)) browser = clip(ua.split(/[\/\s]/)[0], 20);
+
+  return [os, browser].filter(Boolean).join(" · ") || clip(ua, 40);
+}
+
+export function clientInfo(request) {
+  const cf = request.cf || {};
+  return {
+    ip: clip(request.headers.get("CF-Connecting-IP") || request.headers.get("X-Forwarded-For") || "", 45),
+    country: clip(cf.country, 8),
+    region: clip(cf.region, 40),
+    city: clip(cf.city, 40),
+    isp: clip(cf.asOrganization, 40),
+    device: describeDevice(request.headers.get("User-Agent") || ""),
+  };
+}
+
+// action: "upload" | "clip" | "download". Never throws: a failed log write
+// must not break a transfer.
+export async function logEvent(env, request, event) {
+  try {
+    const now = Date.now();
+    // Reversed timestamp so list() returns the newest events first.
+    const stamp = String(LOG_KEY_BASE - now).padStart(13, "0");
+    const key = `${LOG_PREFIX}${stamp}:${Math.random().toString(36).slice(2, 8)}`;
+    const metadata = {
+      t: Math.floor(now / 1000),
+      ...clientInfo(request),
+      action: event.action,
+      kind: event.kind === "text" ? "text" : "file",
+      code: clip(event.code, 6),
+      name: clip(event.name, 60),
+      size: Number(event.size) || 0,
+      count: Number(event.count) || 1,
+    };
+    await env.STORE.put(key, "1", { expirationTtl: LOG_TTL, metadata });
+  } catch {
+    // Best-effort.
+  }
+}
+
+export async function readEvents(env, maxPages = 3) {
+  const events = [];
+  let cursor;
+  let truncated = false;
+  for (let page = 0; page < maxPages; page++) {
+    const listed = await env.STORE.list({ prefix: LOG_PREFIX, cursor, limit: 1000 });
+    for (const key of listed.keys) {
+      if (key.metadata && key.metadata.t) events.push(key.metadata);
+    }
+    if (listed.list_complete) {
+      cursor = undefined;
+      break;
+    }
+    cursor = listed.cursor;
+  }
+  if (cursor) truncated = true;
+  return { events, truncated };
+}

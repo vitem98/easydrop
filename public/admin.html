@@ -93,6 +93,71 @@
           <p class="mt-2 text-xs text-gray-500 dark:text-gray-400">已用 <span id="r2-pct">0%</span> · 只显示占用，不列出其他项目的文件</p>
         </div>
       </div>
+      <!-- Usage -->
+      <div class="space-y-3">
+        <h2 class="text-sm font-semibold text-gray-700 dark:text-gray-300">使用情况 <span class="text-xs font-normal text-gray-400 dark:text-gray-500">近 <span id="usage-days">30</span> 天<span id="usage-truncated" class="hidden"> · 记录较多，只统计最近 3000 条</span></span></h2>
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <div class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4">
+            <p class="text-xs text-gray-500 dark:text-gray-400">使用者</p>
+            <p class="mt-1 text-2xl font-bold" id="usage-users">-</p>
+            <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">近 24 小时 <span id="usage-users-today">0</span> 人</p>
+          </div>
+          <div class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4">
+            <p class="text-xs text-gray-500 dark:text-gray-400">发送次数</p>
+            <p class="mt-1 text-2xl font-bold" id="usage-uploads">-</p>
+            <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">近 24 小时 <span id="usage-uploads-today">0</span> 次</p>
+          </div>
+          <div class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4">
+            <p class="text-xs text-gray-500 dark:text-gray-400">接收次数</p>
+            <p class="mt-1 text-2xl font-bold" id="usage-downloads">-</p>
+            <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">近 24 小时 <span id="usage-downloads-today">0</span> 次</p>
+          </div>
+          <div class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4">
+            <p class="text-xs text-gray-500 dark:text-gray-400">发送流量</p>
+            <p class="mt-1 text-2xl font-bold" id="usage-upload-bytes">-</p>
+            <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">接收 <span id="usage-download-bytes">0 B</span></p>
+          </div>
+        </div>
+
+        <div class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden">
+          <p class="px-4 py-3 text-sm font-semibold border-b border-gray-200 dark:border-gray-700">使用者 <span class="text-xs font-normal text-gray-400 dark:text-gray-500">按 IP 区分</span></p>
+          <div class="overflow-auto max-h-80">
+            <table class="w-full text-sm">
+              <thead>
+                <tr class="border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/80">
+                  <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">IP</th>
+                  <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">位置</th>
+                  <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">设备</th>
+                  <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">发送</th>
+                  <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">接收</th>
+                  <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">最近使用</th>
+                </tr>
+              </thead>
+              <tbody id="user-table" class="divide-y divide-gray-100 dark:divide-gray-700/50"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden">
+          <p class="px-4 py-3 text-sm font-semibold border-b border-gray-200 dark:border-gray-700">最近活动 <span class="text-xs font-normal text-gray-400 dark:text-gray-500">最多 200 条</span></p>
+          <div class="overflow-auto max-h-96">
+            <table class="w-full text-sm">
+              <thead>
+                <tr class="border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/80">
+                  <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">时间</th>
+                  <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">操作</th>
+                  <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Code</th>
+                  <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">内容</th>
+                  <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">IP / 位置</th>
+                  <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">设备</th>
+                </tr>
+              </thead>
+              <tbody id="event-table" class="divide-y divide-gray-100 dark:divide-gray-700/50"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
       <p class="text-sm text-gray-500 dark:text-gray-400">进行中 <span id="stat-count" class="font-semibold text-gray-900 dark:text-gray-100">-</span> 条</p>
 
       <!-- Actions -->
@@ -114,6 +179,7 @@
                 <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Files</th>
                 <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Size</th>
                 <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">存储</th>
+                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">上传者</th>
                 <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Expires</th>
                 <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">One-time</th>
                 <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Created</th>
@@ -121,7 +187,7 @@
               </tr>
             </thead>
             <tbody id="file-table" class="divide-y divide-gray-100 dark:divide-gray-700/50">
-              <tr><td colspan="8" class="px-4 py-8 text-center text-gray-400 dark:text-gray-500 text-sm">Loading...</td></tr>
+              <tr><td colspan="9" class="px-4 py-8 text-center text-gray-400 dark:text-gray-500 text-sm">Loading...</td></tr>
             </tbody>
           </table>
         </div>
@@ -291,6 +357,7 @@
         renderUsage('kv', data.storage?.kv);
         renderUsage('r2', data.storage?.r2);
         renderR2Split(data.storage?.r2);
+        renderUsageStats(data.usage);
 
         const tbody = $('#file-table');
         if (!data.files || data.files.length === 0) {
@@ -305,6 +372,7 @@
             <td class="px-4 py-3">${renderFileSummary(f)}</td>
             <td class="px-4 py-3 text-gray-500 dark:text-gray-400 whitespace-nowrap">${formatSize(f.size)}${f.kind === 'text' ? ' · 文字' : ''}</td>
             <td class="px-4 py-3 whitespace-nowrap">${storageSummaryBadge(f)}</td>
+            <td class="px-4 py-3 whitespace-nowrap">${renderUploader(f)}</td>
             <td class="px-4 py-3 text-gray-500 dark:text-gray-400 whitespace-nowrap">${timeAgo(f.expiresAt)}</td>
             <td class="px-4 py-3">${f.oneTime ? '<span class="inline-block px-2 py-0.5 text-xs rounded-full bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300">Yes</span>' : '<span class="text-gray-400">No</span>'}</td>
             <td class="px-4 py-3 text-gray-500 dark:text-gray-400 whitespace-nowrap">${timeAgo(f.createdAt)}</td>
@@ -317,6 +385,89 @@
       } catch (e) {
         console.error(e);
       }
+    }
+
+    function locationText(o) {
+      const parts = [];
+      [o?.country, o?.region, o?.city].forEach(part => {
+        if (part && !parts.includes(part)) parts.push(part);
+      });
+      return parts.join(' · ');
+    }
+
+    function clientCell(o) {
+      const place = [locationText(o), o?.isp].filter(Boolean).join(' · ');
+      return `<div class="font-mono text-xs">${escHtml(o?.ip || '未知')}</div>` +
+        (place ? `<div class="text-xs text-gray-400 dark:text-gray-500 max-w-[220px] truncate" title="${escAttr(place)}">${escHtml(place)}</div>` : '');
+    }
+
+    function renderUploader(f) {
+      const downloads = `<div class="text-xs text-gray-400 dark:text-gray-500">已接收 ${Number(f.downloads) || 0} 次</div>`;
+      if (!f.uploader) return '<span class="text-gray-400">-</span>' + downloads;
+      const device = f.uploader.device
+        ? `<div class="text-xs text-gray-400 dark:text-gray-500">${escHtml(f.uploader.device)}</div>`
+        : '';
+      return clientCell(f.uploader) + device + downloads;
+    }
+
+    function actionBadge(event) {
+      const text = event.kind === 'text';
+      const map = {
+        upload: ['发送文件', 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300'],
+        clip: ['发送文字', 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300'],
+        download: [text ? '接收文字' : '接收文件', 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300'],
+      };
+      const [label, cls] = map[event.action] || [event.action || '-', 'bg-gray-100 dark:bg-gray-700'];
+      return `<span class="inline-block px-2 py-0.5 text-xs rounded-full ${cls}">${escHtml(label)}</span>`;
+    }
+
+    function emptyRow(cols, text) {
+      return `<tr><td colspan="${cols}" class="px-4 py-6 text-center text-gray-400 dark:text-gray-500 text-sm">${text}</td></tr>`;
+    }
+
+    function renderUsageStats(usage) {
+      const summary = usage?.summary || {};
+      const today = summary.today || {};
+      $('#usage-days').textContent = usage?.days || 30;
+      $('#usage-truncated').classList.toggle('hidden', !usage?.truncated);
+      $('#usage-users').textContent = summary.users ?? 0;
+      $('#usage-users-today').textContent = today.users ?? 0;
+      $('#usage-uploads').textContent = summary.uploads ?? 0;
+      $('#usage-uploads-today').textContent = today.uploads ?? 0;
+      $('#usage-downloads').textContent = summary.downloads ?? 0;
+      $('#usage-downloads-today').textContent = today.downloads ?? 0;
+      $('#usage-upload-bytes').textContent = formatSize(summary.uploadBytes);
+      $('#usage-download-bytes').textContent = formatSize(summary.downloadBytes);
+
+      const users = usage?.users || [];
+      $('#user-table').innerHTML = users.length ? users.map(u => `
+        <tr class="hover:bg-gray-50 dark:hover:bg-gray-700/30 transition">
+          <td class="px-4 py-3 font-mono text-xs whitespace-nowrap">${escHtml(u.ip || '未知')}</td>
+          <td class="px-4 py-3 text-gray-500 dark:text-gray-400">
+            <div class="whitespace-nowrap">${escHtml(locationText(u) || '-')}</div>
+            ${u.isp ? `<div class="text-xs text-gray-400 dark:text-gray-500 max-w-[200px] truncate" title="${escAttr(u.isp)}">${escHtml(u.isp)}</div>` : ''}
+          </td>
+          <td class="px-4 py-3 text-xs text-gray-500 dark:text-gray-400">${(u.devices?.length ? u.devices : [u.device || '-']).map(d => `<div class="whitespace-nowrap">${escHtml(d)}</div>`).join('')}</td>
+          <td class="px-4 py-3 text-gray-500 dark:text-gray-400 whitespace-nowrap">${u.uploads || 0} 次 · ${formatSize(u.uploadBytes)}</td>
+          <td class="px-4 py-3 text-gray-500 dark:text-gray-400 whitespace-nowrap">${u.downloads || 0} 次 · ${formatSize(u.downloadBytes)}</td>
+          <td class="px-4 py-3 text-gray-500 dark:text-gray-400 whitespace-nowrap">${timeAgo(u.lastSeen)}</td>
+        </tr>
+      `).join('') : emptyRow(6, '还没有使用记录，新的发送和接收会出现在这里');
+
+      const events = usage?.events || [];
+      $('#event-table').innerHTML = events.length ? events.map(e => `
+        <tr class="hover:bg-gray-50 dark:hover:bg-gray-700/30 transition">
+          <td class="px-4 py-2.5 text-gray-500 dark:text-gray-400 whitespace-nowrap">${timeAgo(e.t)}</td>
+          <td class="px-4 py-2.5 whitespace-nowrap">${actionBadge(e)}</td>
+          <td class="px-4 py-2.5 font-mono text-brand-600 whitespace-nowrap">${escHtml(e.code || '-')}</td>
+          <td class="px-4 py-2.5">
+            <div class="max-w-[220px] truncate" title="${escAttr(e.name || '')}">${escHtml(e.name || '-')}</div>
+            <div class="text-xs text-gray-400 dark:text-gray-500">${formatSize(e.size)}</div>
+          </td>
+          <td class="px-4 py-2.5">${clientCell(e)}</td>
+          <td class="px-4 py-2.5 text-xs text-gray-500 dark:text-gray-400 whitespace-nowrap">${escHtml(e.device || '-')}</td>
+        </tr>
+      `).join('') : emptyRow(6, '还没有活动记录');
     }
 
     function renderR2Split(r2) {
@@ -332,7 +483,7 @@
     }
 
     function escAttr(value) {
-      return String(value || '').replace(/[&"']/g, (char) => ({ '&': '&amp;', '"': '&quot;', "'": '&#39;' }[char]));
+      return String(value || '').replace(/[&"'<>]/g, (char) => ({ '&': '&amp;', '"': '&quot;', "'": '&#39;', '<': '&lt;', '>': '&gt;' }[char]));
     }
 
     async function viewTransfer(code, index, filename, contentType) {

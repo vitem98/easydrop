@@ -4,6 +4,7 @@ import {
   listStoredItems,
   deleteStoredItems,
   streamAndThen,
+  logEvent,
 } from "../../_shared.js";
 
 function normalizeFiles(meta) {
@@ -60,6 +61,13 @@ export async function onRequestGet(context) {
     if (text == null) {
       return err("文字不存在或已过期", 404);
     }
+    waitUntil(logEvent(env, request, {
+      action: "download",
+      kind: "text",
+      code,
+      name: meta.filename,
+      size: meta.size,
+    }));
     if (meta.oneTime) {
       waitUntil((async () => {
         await env.STORE.delete(`meta:${code}`).catch(() => {});
@@ -96,6 +104,14 @@ export async function onRequestGet(context) {
     body = await env.STORE.get(storageKey, { type: "arrayBuffer" });
     if (!body) return err("文件不存在", 404);
   }
+
+  waitUntil(logEvent(env, request, {
+    action: "download",
+    kind: "file",
+    code,
+    name: file.filename,
+    size: file.size,
+  }));
 
   if (meta.oneTime) {
     const current = { key: storageKey, storage };
