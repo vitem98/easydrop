@@ -1,5 +1,13 @@
 export const KV_MAX_BYTES = 25 * 1024 * 1024; // KV value size limit
 export const REQUEST_MAX_BYTES = 100 * 1024 * 1024; // Pages Functions request body limit
+// Uploads that fit in one request body go to /api/upload. Anything larger, or
+// any file bound for R2, is sent in pieces through /api/chunk/*.
+export const SINGLE_REQUEST_MAX_BYTES = 95 * 1024 * 1024;
+export const CHUNK_BYTES = 16 * 1024 * 1024; // R2 multipart part size (min 5 MiB)
+export const DEFAULT_MAX_UPLOAD_BYTES = 400 * 1024 * 1024;
+export const MAX_UPLOAD_CEILING_BYTES = 5 * 1024 * 1024 * 1024;
+export const MIN_UPLOAD_LIMIT_BYTES = 1024 * 1024;
+export const PENDING_TTL = 86400;
 export const MAX_TEXT_BYTES = 1024 * 1024;
 export const MAX_FILE_COUNT = 10;
 export const TTL_OPTIONS = { "3600": 3600, "86400": 86400, "604800": 604800 };
@@ -47,7 +55,9 @@ export async function generateUniqueCode(env) {
   for (let i = 0; i < CODE_RETRIES; i++) {
     const code = randomCode();
     const existing = await env.STORE.get(`meta:${code}`);
-    if (!existing) return code;
+    if (existing) continue;
+    const pending = await env.STORE.get(`pending:${code}`);
+    if (!pending) return code;
   }
   return null;
 }
@@ -294,4 +304,78 @@ export async function readEvents(env, maxPages = 3) {
   }
   if (cursor) truncated = true;
   return { events, truncated };
+}
+
+// --- Settings (editable on the admin page) ---
+const SETTINGS_KEY = "settings";
+
+function clampUploadLimit(value) {
+  const bytes = Math.floor(Number(value));
+  if (!Number.isFinite(bytes) || bytes <= 0) return DEFAULT_MAX_UPLOAD_BYTES;
+  return Math.min(MAX_UPLOAD_CEILING_BYTES, Math.max(MIN_UPLOAD_LIMIT_BYTES, bytes));
+}
+
+export async function readSettings(env) {
+  let saved = {};
+  try {
+    const raw = await env.STORE.get(SETTINGS_KEY);
+    if (raw) saved = JSON.parse(raw) || {};
+  } catch {
+    saved = {};
+  }
+  return { maxUploadBytes: clampUploadLimit(saved.maxUploadBytes) };
+}
+
+export async function writeSettings(env, settings) {
+  const next = { maxUploadBytes: clampUploadLimit(settings.maxUploadBytes) };
+  await env.STORE.put(SETTINGS_KEY, JSON.stringify(next));
+  return next;
+}
+
+// The limit for one upload (each file and the total). Without R2, files can
+// only live in KV, so the KV value limit applies.
+export async function uploadLimit(env) {
+  if (!env.BUCKET) return KV_MAX_BYTES;
+  return (await readSettings(env)).maxUploadBytes;
+}
+
+export function formatMb(bytes) {
+  const mb = bytes / 1024 / 1024;
+  return Number.isInteger(mb) ? String(mb) : mb.toFixed(1);
+}
+
+// --- Chunked upload sessions ---
+export async function readPending(env, code, token) {
+  if (!/^\d{6}$/.test(code || "") || !token) return null;
+  const raw = await env.STORE.get(`pending:${code}`);
+  if (!raw) return null;
+  try {
+    const pending = JSON.parse(raw);
+    return pending && pending.token === token ? pending : null;
+  } catch {
+    return null;
+  }
+}
+
+export function partCount(size) {
+  return Math.max(1, Math.ceil(size / CHUNK_BYTES));
+}
+
+export async function discardPending(env, code, pending) {
+  await Promise.all(pending.files.map(async (file) => {
+    const key = `file:${code}:${file.index}`;
+    try {
+      if (file.storage === "r2") {
+        if (env.BUCKET && file.uploadId) {
+          await env.BUCKET.resumeMultipartUpload(key, file.uploadId).abort();
+        }
+        if (env.BUCKET) await env.BUCKET.delete(key);
+      } else {
+        await env.STORE.delete(key);
+      }
+    } catch {
+      // Best-effort. R2 drops unfinished multipart uploads on its own.
+    }
+  }));
+  await env.STORE.delete(`pending:${code}`).catch(() => {});
 }

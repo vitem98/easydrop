@@ -22,6 +22,6 @@ binding = "R2_AK_AR_SUBMISSIONS"
 bucket_name = "ak-ar-submissions"
 
 [vars]
-# Hard ceiling for one request. Objects <= 25 MB stay in KV.
-MAX_FILE_SIZE = "104857600"
+# The per-upload size limit is set on the admin page (default 400 MB) and
+# stored in KV under "settings". Objects <= 25 MB stay in KV.
 ADMIN_PASSWORD = "XIEjiefeng0615"

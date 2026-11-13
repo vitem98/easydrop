@@ -3,14 +3,14 @@ const i18n = {
     send: "Send",
     receive: "Receive",
     dropHint: "Drag & drop files here, or click to select",
-    maxSize: "KV up to 25 MB, R2 above that, 100 MB per upload",
+    maxSize: "KV up to 25 MB, R2 above that, {max} per upload",
     modeFile: "File",
     modeText: "Text",
     textPlaceholder: "Paste text here to get a 6-digit code",
     textHint: "Pasting text creates a 6-digit code. Enter that code on the other computer.",
     textEmpty: "Paste some text first",
     textTooLong: "Text is larger than 1 MB",
-    tooLarge: "A file or the total upload is larger than 100 MB",
+    tooLarge: "A file or the total upload is larger than {max}",
     usesR2: "Over 25 MB, will be stored in R2",
     pasteText: "Paste text",
     copyText: "Copy text",
@@ -43,14 +43,14 @@ const i18n = {
     send: "发送",
     receive: "接收",
     dropHint: "拖拽文件到此处，或点击选择",
-    maxSize: "25 MB 以内用 KV，超过后用 R2，单次最大 100 MB",
+    maxSize: "25 MB 以内用 KV，超过后用 R2，单次最大 {max}",
     modeFile: "文件",
     modeText: "文字",
     textPlaceholder: "在这里粘贴文字，会生成 6 位验证码",
     textHint: "贴上文字后会生成 6 位验证码，另一台电脑输入验证码即可取回。",
     textEmpty: "请先粘贴文字",
     textTooLong: "文字超过 1 MB",
-    tooLarge: "单个文件或本次上传超过 100 MB",
+    tooLarge: "单个文件或本次上传超过 {max}",
     usesR2: "超过 25 MB，将存到 R2",
     pasteText: "粘贴文字",
     copyText: "复制文字",
@@ -86,14 +86,39 @@ let currentFiles = [];
 let sendMode = "file";
 let sending = false;
 const KV_LIMIT = 25 * 1024 * 1024;
-const REQUEST_LIMIT = 100 * 1024 * 1024;
+// Replaced by /api/config when the page loads (set on the admin page).
+let REQUEST_LIMIT = 400 * 1024 * 1024;
+let SINGLE_REQUEST_LIMIT = 95 * 1024 * 1024;
+const CHUNK_PARALLEL = 3;
+const CHUNK_RETRIES = 2;
 const TEXT_LIMIT = 1024 * 1024;
 
 function $(sel) { return document.querySelector(sel); }
 function $$(sel) { return document.querySelectorAll(sel); }
 
+function limitLabel() {
+  const mb = REQUEST_LIMIT / 1024 / 1024;
+  if (mb >= 1024 && Number.isInteger(mb / 1024)) return (mb / 1024) + ' GB';
+  return (Number.isInteger(mb) ? mb : mb.toFixed(1)) + ' MB';
+}
+
 function t(key) {
-  return i18n[currentLang]?.[key] || i18n.en[key] || key;
+  const text = i18n[currentLang]?.[key] || i18n.en[key] || key;
+  return text.includes('{max}') ? text.replace('{max}', limitLabel()) : text;
+}
+
+async function loadConfig() {
+  try {
+    const res = await fetch('/api/config');
+    if (!res.ok) return;
+    const config = await res.json();
+    if (config.maxUploadBytes > 0) REQUEST_LIMIT = config.maxUploadBytes;
+    if (config.singleRequestMaxBytes > 0) SINGLE_REQUEST_LIMIT = config.singleRequestMaxBytes;
+    applyLang();
+    if (currentFiles.length) showFileInfo(currentFiles);
+  } catch {
+    // Keep the built-in default. The server still enforces the real limit.
+  }
 }
 
 function applyLang() {
@@ -359,6 +384,138 @@ function doUpload() {
 
 function startFileUpload() {
   if (sending) return;
+  const fitsOneRequest = getTotalSize(currentFiles) <= SINGLE_REQUEST_LIMIT
+    && currentFiles.every(file => file.size <= KV_LIMIT);
+  if (fitsOneRequest) uploadInOneRequest();
+  else uploadInChunks();
+}
+
+function setUploadProgress(fraction) {
+  const pct = Math.max(0, Math.min(100, Math.round(fraction * 100)));
+  $('#progressBar').style.width = pct + '%';
+  $('#progressText').textContent = pct + '%';
+}
+
+async function postJson(url, payload) {
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(readErrorMessage(res.status, data));
+  return data;
+}
+
+function putBlob(url, blob, onProgress) {
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open('PUT', url);
+    xhr.upload.addEventListener('progress', (e) => onProgress(e.loaded));
+    xhr.addEventListener('load', () => {
+      let data = {};
+      try { data = JSON.parse(xhr.responseText); } catch {}
+      if (xhr.status >= 200 && xhr.status < 300) {
+        onProgress(blob.size);
+        resolve(data);
+      } else {
+        const error = new Error(readErrorMessage(xhr.status, data));
+        error.retry = xhr.status >= 500;
+        reject(error);
+      }
+    });
+    xhr.addEventListener('error', () => {
+      const error = new Error(t('uploadFailed'));
+      error.retry = true;
+      reject(error);
+    });
+    xhr.send(blob);
+  });
+}
+
+// Files over 25 MB, or uploads too large for one request, go up in pieces:
+// /api/chunk/init -> /api/chunk/part (several at a time) -> /api/chunk/complete.
+async function uploadInChunks() {
+  sending = true;
+  $('#btnUpload').disabled = true;
+  $('#uploadResult').classList.add('hidden');
+  $('#uploadProgress').classList.remove('hidden');
+  setUploadProgress(0);
+
+  const files = currentFiles.slice();
+  let session = null;
+  try {
+    session = await postJson('/api/chunk/init', {
+      files: files.map(file => ({ name: file.name, size: file.size, type: file.type })),
+      ttl: $('#ttl').value,
+      oneTime: $('#oneTime').checked,
+    });
+
+    const base = `/api/chunk/part?code=${session.code}&token=${encodeURIComponent(session.token)}`;
+    const tasks = [];
+    files.forEach((file, index) => {
+      if (session.files[index].storage !== 'r2') {
+        tasks.push({ index, part: 0, blob: file });
+        return;
+      }
+      const count = Math.max(1, Math.ceil(file.size / session.chunkBytes));
+      for (let part = 1; part <= count; part++) {
+        const start = (part - 1) * session.chunkBytes;
+        tasks.push({ index, part, blob: file.slice(start, Math.min(file.size, start + session.chunkBytes)) });
+      }
+    });
+
+    const totalSize = getTotalSize(files) || 1;
+    const sent = new Array(tasks.length).fill(0);
+    const parts = files.map(() => []);
+    let next = 0;
+    let failed = false;
+
+    const worker = async () => {
+      while (!failed && next < tasks.length) {
+        const id = next++;
+        const task = tasks[id];
+        const url = `${base}&file=${task.index}` + (task.part ? `&part=${task.part}` : '');
+        for (let attempt = 0; ; attempt++) {
+          try {
+            const result = await putBlob(url, task.blob, (loaded) => {
+              sent[id] = Math.min(loaded, task.blob.size);
+              setUploadProgress(sent.reduce((sum, n) => sum + n, 0) / totalSize);
+            });
+            if (task.part) parts[task.index].push({ partNumber: result.partNumber, etag: result.etag });
+            break;
+          } catch (error) {
+            if (failed || !error.retry || attempt >= CHUNK_RETRIES) {
+              failed = true;
+              throw error;
+            }
+            await new Promise(resolve => setTimeout(resolve, 1000 * (attempt + 1)));
+          }
+        }
+      }
+    };
+    await Promise.all(Array.from({ length: Math.min(CHUNK_PARALLEL, tasks.length) }, worker));
+
+    const data = await postJson('/api/chunk/complete', { code: session.code, token: session.token, parts });
+    session = null;
+    const received = normalizeReceivedFiles(data);
+    const uploadedSize = typeof data.size === 'number' ? data.size : getTotalSize(received);
+    const label = received.length === 1 ? received[0].filename : formatFileCount(received.length);
+    sending = false;
+    $('#uploadProgress').classList.add('hidden');
+    showCodeResult({ ...data, size: uploadedSize, files: received }, label);
+  } catch (error) {
+    sending = false;
+    $('#uploadProgress').classList.add('hidden');
+    toast(error?.message || t('uploadFailed'));
+    updateSendMode();
+    if (session) {
+      postJson('/api/chunk/abort', { code: session.code, token: session.token }).catch(() => {});
+    }
+  }
+}
+
+function uploadInOneRequest() {
   sending = true;
   $('#btnUpload').disabled = true;
   $('#uploadResult').classList.add('hidden');
@@ -576,6 +733,7 @@ async function fetchFileInfo(expectKind) {
   const navLang = navigator.language.startsWith('zh') ? 'zh' : 'en';
   currentLang = savedLang || navLang;
   applyLang();
+  loadConfig();
 
   // Tabs
   const hash = new URLSearchParams(window.location.search);

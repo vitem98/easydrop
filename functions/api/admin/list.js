@@ -6,6 +6,10 @@ import {
   nowSec,
   readEvents,
   LOG_DAYS,
+  readSettings,
+  DEFAULT_MAX_UPLOAD_BYTES,
+  MAX_UPLOAD_CEILING_BYTES,
+  MIN_UPLOAD_LIMIT_BYTES,
 } from "../../_shared.js";
 
 const KV_STORAGE_LIMIT = 1024 * 1024 * 1024;
@@ -266,6 +270,13 @@ export async function onRequestGet(context) {
       },
     },
     usage: buildUsage(logged.events, logged.truncated),
+    settings: {
+      maxUploadBytes: (await readSettings(env)).maxUploadBytes,
+      defaultMaxUploadBytes: DEFAULT_MAX_UPLOAD_BYTES,
+      minUploadBytes: MIN_UPLOAD_LIMIT_BYTES,
+      ceilingUploadBytes: MAX_UPLOAD_CEILING_BYTES,
+      r2Configured: r2.configured && !!env.BUCKET,
+    },
     files: files.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0)),
   });
 }

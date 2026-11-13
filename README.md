@@ -15,7 +15,7 @@
 - **Dark mode** — follows system preference, manual toggle
 - **Bilingual UI** — English / 中文, auto-detected, switchable
 - **Admin panel** — password-protected dashboard at `/admin.html` to monitor and manage files, with a 30-day usage log (who sent or received what: IP, location, device)
-- **Large files** — files over 25 MB go to R2 (up to 100 MB per upload), no password needed
+- **Large files** — files over 25 MB go to R2 in pieces, no password needed. The per-upload limit is set on the admin page (default 400 MB)
 - **Auto-expire** — KV TTL handles expiration automatically, no cron needed
 
 ---
@@ -193,7 +193,7 @@ npx wrangler pages deploy public
 - 6 位验证码 + QR 码
 - 暗色模式、中英双语
 - 密码保护的管理面板（`/admin.html`），可查看近 30 天的使用情况（谁发送、谁接收：IP、位置、设备）
-- 超过 25 MB 的文件存到 R2（单次最大 100 MB），不需要密码
+- 超过 25 MB 的文件分片存到 R2，不需要密码；单次上限在管理面板里设置（默认 400 MB）
 - 文件自动过期，无需定时清理
 
 详细说明见上方英文部分。

@@ -13,6 +13,8 @@ import {
   sweepExpiredR2,
   clientInfo,
   logEvent,
+  uploadLimit,
+  formatMb,
 } from "../_shared.js";
 
 export async function onRequestPost(context) {
@@ -36,15 +38,15 @@ export async function onRequestPost(context) {
     return err("请选择文件");
   }
 
-  const hardMax = env.BUCKET ? REQUEST_MAX_BYTES : KV_MAX_BYTES;
+  const limit = await uploadLimit(env);
+  const hardMax = Math.min(REQUEST_MAX_BYTES, limit);
   if (files.length > MAX_FILE_COUNT) {
     return err(`文件过多，最多 ${MAX_FILE_COUNT} 个`, 413);
   }
 
   for (const file of files) {
     if (file.size > hardMax) {
-      const limitMb = Math.round(hardMax / 1024 / 1024);
-      return err(`${file.name} 超过 ${limitMb} MB 限制`, 413);
+      return err(`${file.name} 超过 ${formatMb(hardMax)} MB 限制`, 413);
     }
     if (file.size > KV_MAX_BYTES && !env.BUCKET) {
       return err(`${file.name} 超过 25 MB，需要先配置 R2`, 413);
@@ -52,8 +54,8 @@ export async function onRequestPost(context) {
   }
 
   const totalSize = files.reduce((sum, file) => sum + file.size, 0);
-  if (totalSize > REQUEST_MAX_BYTES) {
-    return err("单次上传不能超过 100 MB", 413);
+  if (totalSize > hardMax) {
+    return err(`单次上传不能超过 ${formatMb(hardMax)} MB`, 413);
   }
 
   const ttlStr = form.get("ttl") || "86400";

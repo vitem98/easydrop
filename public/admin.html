@@ -93,6 +93,22 @@
           <p class="mt-2 text-xs text-gray-500 dark:text-gray-400">已用 <span id="r2-pct">0%</span> · 只显示占用，不列出其他项目的文件</p>
         </div>
       </div>
+      <!-- Settings -->
+      <div class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-5">
+        <p class="text-sm font-semibold">上传设置</p>
+        <div class="mt-3 flex flex-wrap items-center gap-3">
+          <label for="set-max-mb" class="text-sm text-gray-500 dark:text-gray-400">单次上传上限</label>
+          <div class="flex items-center gap-2">
+            <input id="set-max-mb" type="number" min="1" max="5120" step="1" class="w-28 rounded-lg border border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-900 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500" />
+            <span class="text-sm text-gray-500 dark:text-gray-400">MB</span>
+          </div>
+          <button id="btn-save-settings" type="button" class="px-4 py-2 rounded-lg bg-brand-600 hover:bg-brand-700 text-white text-sm font-medium transition disabled:opacity-50">保存</button>
+          <span id="settings-msg" class="text-xs text-gray-500 dark:text-gray-400"></span>
+        </div>
+        <p class="mt-2 text-xs text-gray-500 dark:text-gray-400">一次发送的每个文件和总大小都不能超过这个值，保存后立即生效。可填 <span id="set-min-mb">1</span> 到 <span id="set-ceiling-mb">5120</span> MB，默认 <span id="set-default-mb">400</span> MB。超过 25 MB 的文件存入 R2，会占用上面 R2 的额度。</p>
+        <p id="settings-no-r2" class="hidden mt-1 text-xs text-amber-600 dark:text-amber-400">没有配置 R2，实际上限是 25 MB。</p>
+      </div>
+
       <!-- Usage -->
       <div class="space-y-3">
         <h2 class="text-sm font-semibold text-gray-700 dark:text-gray-300">使用情况 <span class="text-xs font-normal text-gray-400 dark:text-gray-500">近 <span id="usage-days">30</span> 天<span id="usage-truncated" class="hidden"> · 记录较多，只统计最近 3000 条</span></span></h2>
@@ -358,6 +374,7 @@
         renderUsage('r2', data.storage?.r2);
         renderR2Split(data.storage?.r2);
         renderUsageStats(data.usage);
+        renderSettings(data.settings);
 
         const tbody = $('#file-table');
         if (!data.files || data.files.length === 0) {
@@ -468,6 +485,68 @@
           <td class="px-4 py-2.5 text-xs text-gray-500 dark:text-gray-400 whitespace-nowrap">${escHtml(e.device || '-')}</td>
         </tr>
       `).join('') : emptyRow(6, '还没有活动记录');
+    }
+
+    const MB = 1024 * 1024;
+
+    function renderSettings(settings) {
+      if (!settings) return;
+      const input = $('#set-max-mb');
+      const minMb = Math.round((settings.minUploadBytes || MB) / MB);
+      const ceilingMb = Math.round((settings.ceilingUploadBytes || 5120 * MB) / MB);
+      input.min = minMb;
+      input.max = ceilingMb;
+      // Do not overwrite a value the admin is in the middle of typing.
+      if (document.activeElement !== input) {
+        input.value = +(settings.maxUploadBytes / MB).toFixed(1);
+      }
+      $('#set-min-mb').textContent = minMb;
+      $('#set-ceiling-mb').textContent = ceilingMb;
+      $('#set-default-mb').textContent = Math.round((settings.defaultMaxUploadBytes || 400 * MB) / MB);
+      if ('r2Configured' in settings) {
+        $('#settings-no-r2').classList.toggle('hidden', settings.r2Configured);
+      }
+    }
+
+    async function saveSettings() {
+      const input = $('#set-max-mb');
+      const msg = $('#settings-msg');
+      const mb = Number(input.value);
+      const setMsg = (text, bad) => {
+        msg.textContent = text;
+        msg.className = 'text-xs ' + (bad ? 'text-red-500' : 'text-emerald-600 dark:text-emerald-400');
+      };
+      if (!input.value || !Number.isFinite(mb) || mb < Number(input.min) || mb > Number(input.max)) {
+        setMsg(`请填 ${input.min} 到 ${input.max} 之间的数字`, true);
+        return;
+      }
+      const button = $('#btn-save-settings');
+      button.disabled = true;
+      try {
+        const res = await fetch('/api/admin/settings', {
+          method: 'POST',
+          headers: { 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ maxUploadMb: mb }),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (res.status === 401) {
+          sessionStorage.removeItem('admin-token');
+          token = '';
+          showLogin();
+          return;
+        }
+        if (!res.ok) {
+          setMsg(data.error || '保存失败', true);
+          return;
+        }
+        input.blur();
+        renderSettings(data);
+        setMsg(`已保存，单次上限 ${+(data.maxUploadBytes / MB).toFixed(1)} MB`, false);
+      } catch (e) {
+        setMsg('网络错误，没有保存', true);
+      } finally {
+        button.disabled = false;
+      }
     }
 
     function renderR2Split(r2) {
@@ -583,6 +662,10 @@
     });
 
     $('#btn-refresh').addEventListener('click', loadFiles);
+    $('#btn-save-settings').addEventListener('click', saveSettings);
+    $('#set-max-mb').addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') saveSettings();
+    });
     $('#file-table').addEventListener('click', (event) => {
       const button = event.target.closest('.view-file');
       if (!button) return;
